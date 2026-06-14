@@ -178,3 +178,17 @@ def test_reversible_cards() -> None:
     images = fetch_scans_scryfall(decklist)
 
     assert len(images) == 2  # Front and back
+
+
+def test_card_border_color() -> None:
+    from mtg_proxies.decklists.decklist import Card
+
+    card = Card(count=1, card={"name": "X", "border_color": "white", "image_uris": {}})
+    assert card.border_color == "white"
+
+
+def test_card_border_color_defaults_to_black() -> None:
+    from mtg_proxies.decklists.decklist import Card
+
+    card = Card(count=1, card={"name": "X", "image_uris": {}})
+    assert card.border_color == "black"
