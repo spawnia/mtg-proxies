@@ -10,12 +10,22 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="module")
-def example_images(example_decklist: Decklist) -> list[str]:
+def example_scans(example_decklist: Decklist) -> list[tuple[str, str]]:
     from mtg_proxies import fetch_scans_scryfall
 
-    example_images = fetch_scans_scryfall(example_decklist)
-    assert len(example_images) == 7
-    return example_images
+    example_scans = fetch_scans_scryfall(example_decklist)
+    assert len(example_scans) == 7
+    return example_scans
+
+
+@pytest.fixture(scope="module")
+def example_images(example_scans: list[tuple[str, str]]) -> list[str]:
+    return [path for path, _ in example_scans]
+
+
+def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str]]) -> None:
+    assert all(isinstance(t, tuple) and len(t) == 2 for t in example_scans)
+    assert all(isinstance(t[0], str) and isinstance(t[1], str) for t in example_scans)
 
 
 def test_print_cards_fpdf(example_images: list[str], tmp_path: Path) -> None:

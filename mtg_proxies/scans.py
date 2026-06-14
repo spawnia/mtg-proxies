@@ -8,7 +8,9 @@ import mtg_proxies.scryfall as scryfall
 from mtg_proxies.decklists.decklist import Decklist
 
 
-def fetch_scans_scryfall(decklist: Decklist, faces: Literal["all", "front", "back"] = "all") -> list[str]:
+def fetch_scans_scryfall(
+    decklist: Decklist, faces: Literal["all", "front", "back"] = "all"
+) -> list[tuple[str, str]]:
     """Search Scryfall for scans of a decklist.
 
     Args:
@@ -16,10 +18,10 @@ def fetch_scans_scryfall(decklist: Decklist, faces: Literal["all", "front", "bac
         faces: Which faces to fetch ("all", "front", "back")
 
     Returns:
-        List: List of image files
+        List of ``(image_path, border_color)`` tuples, one per printed face.
     """
     return [
-        scan
+        (scan, card.border_color)
         for card in tqdm(decklist.cards, desc="Fetching artwork")
         for i, image_uri in enumerate(card.image_uris)
         for scan in [scryfall.get_image(image_uri["png"], silent=True)] * card.count
