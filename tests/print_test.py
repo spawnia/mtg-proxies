@@ -53,3 +53,43 @@ def test_print_cards_matplotlib_png(example_images: list[str], tmp_path: Path) -
     print_cards_matplotlib(example_images, out_file)
 
     assert (tmp_path / "decklist_000.png").is_file()
+
+
+def test_occupied_space_zero_gutter_matches_current() -> None:
+    from mtg_proxies.print_cards import _occupied_space
+    import numpy as np
+
+    result = _occupied_space(
+        cardsize=np.array([2.5, 3.5]), pos=np.array([2, 3]), border_crop=14
+    )
+    expected = _occupied_space(
+        cardsize=np.array([2.5, 3.5]), pos=np.array([2, 3]), border_crop=14, gutter=0.0
+    )
+    assert np.allclose(result, expected)
+
+
+def test_occupied_space_open_form_adds_pos_gutters() -> None:
+    from mtg_proxies.print_cards import _occupied_space
+    import numpy as np
+
+    result = _occupied_space(
+        cardsize=np.array([2.5, 3.5]),
+        pos=np.array([2, 0]),
+        border_crop=0,
+        gutter=0.5,
+    )
+    assert np.allclose(result, np.array([2 * 2.5 + 2 * 0.5, 0]))
+
+
+def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
+    from mtg_proxies.print_cards import _occupied_space
+    import numpy as np
+
+    result = _occupied_space(
+        cardsize=np.array([2.5, 3.5]),
+        pos=np.array([3, 4]),
+        border_crop=0,
+        gutter=0.5,
+        closed=True,
+    )
+    assert np.allclose(result, np.array([3 * 2.5 + 2 * 0.5, 4 * 3.5 + 3 * 0.5]))
