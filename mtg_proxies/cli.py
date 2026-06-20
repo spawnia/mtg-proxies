@@ -100,9 +100,9 @@ def main() -> None:
     )
     print_parser.add_argument(
         "--border_crop",
-        help="how much to crop inner borders of printed cards, in source image pixels (default: %(default)s)",
+        help="how much to crop inner borders of printed cards, in source image pixels (default: 14)",
         type=int,
-        default=14,
+        default=argparse.SUPPRESS,
         metavar="PIXELS",
     )
     print_parser.add_argument(
@@ -123,6 +123,26 @@ def main() -> None:
         help="which faces to print (default: %(default)s)",
         choices=["all", "front", "back"],
         default="all",
+    )
+    print_parser.add_argument(
+        "--bleed",
+        help="extend each card outward by this many mm, painted with the card's Scryfall border color (default: %(default)s)",
+        type=float,
+        default=0.0,
+        metavar="MM",
+    )
+    print_parser.add_argument(
+        "--gutter",
+        help="space cards apart by this many mm on the sheet (default: %(default)s)",
+        type=float,
+        default=0.0,
+        metavar="MM",
+    )
+    print_parser.add_argument(
+        "--borderless-fill",
+        help="how to fill the bleed area for borderless cards: edge (replicate outermost pixel), black, or white (default: %(default)s)",
+        choices=["edge", "black", "white"],
+        default="edge",
     )
 
     # Convert tool
@@ -175,6 +195,11 @@ def main() -> None:
 
     match args.command:
         case "print":
+            border_crop_explicit = hasattr(args, "border_crop")
+            border_crop = getattr(args, "border_crop", 0 if args.gutter > 0 else 14)
+            if border_crop_explicit and border_crop > 0 and args.gutter > 0:
+                parser.error("--border_crop and --gutter are mutually exclusive when both > 0")
+
             # Parse decklist
             decklist = parse_decklist_spec(args.decklist)
 
@@ -194,9 +219,12 @@ def main() -> None:
                     args.outfile,
                     papersize=args.paper * 25.4,
                     cardsize=np.array([2.5, 3.5]) * 25.4 * args.scale,
-                    border_crop=args.border_crop,
+                    border_crop=border_crop,
                     background_color=background_color,
                     cropmarks=args.cropmarks,
+                    bleed_mm=args.bleed,
+                    gutter_mm=args.gutter,
+                    borderless_fill=args.borderless_fill,
                 )
             else:
                 print_cards_matplotlib(
@@ -205,8 +233,11 @@ def main() -> None:
                     papersize=args.paper,
                     cardsize=np.array([2.5, 3.5]) * args.scale,
                     dpi=args.dpi,
-                    border_crop=args.border_crop,
+                    border_crop=border_crop,
                     background_color=args.background,
+                    bleed_mm=args.bleed,
+                    gutter_mm=args.gutter,
+                    borderless_fill=args.borderless_fill,
                 )
 
         case "convert":
