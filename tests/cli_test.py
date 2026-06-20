@@ -33,3 +33,33 @@ options:
   -h, --help            show this help message and exit
 """
     )
+
+
+def test_print_help_mentions_new_flags(capsys: pytest.CaptureFixture) -> None:
+    from mtg_proxies.cli import main
+
+    with patch("sys.argv", ["mtg-proxies", "print", "--help"]), pytest.raises(SystemExit):
+        main()
+
+    captured = capsys.readouterr()
+    assert "--bleed" in captured.out
+    assert "--gutter" in captured.out
+    assert "--borderless-fill" in captured.out
+
+
+def test_border_crop_and_gutter_mutually_exclusive(capsys: pytest.CaptureFixture) -> None:
+    from mtg_proxies.cli import main
+
+    argv = [
+        "mtg-proxies",
+        "print",
+        "/tmp/does-not-exist.txt",
+        "/tmp/out.pdf",
+        "--border_crop=14",
+        "--gutter=5",
+    ]
+    with patch("sys.argv", argv), pytest.raises(SystemExit):
+        main()
+
+    captured = capsys.readouterr()
+    assert "mutually exclusive" in (captured.err + captured.out)

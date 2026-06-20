@@ -35,6 +35,10 @@ class Card:
         """
         return [face["image_uris"] for face in scryfall.get_faces(self.card)]
 
+    @property
+    def border_color(self) -> str:
+        return self.card.get("border_color", "black")
+
     def __format__(self, format_spec: str) -> str:
         if format_spec == "text":
             return f"{self.count} {self['name']}"
