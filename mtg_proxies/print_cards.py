@@ -13,6 +13,29 @@ from mtg_proxies.plotting import SplitPages
 
 image_size = np.array([745, 1040])
 
+BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
+    "black": (0, 0, 0),
+    "white": (255, 255, 255),
+    "silver": (192, 192, 192),
+    "gold": (212, 175, 55),
+}
+
+
+def _resolve_bleed_color(
+    border_color: str,
+    borderless_fill: str,
+) -> tuple[int, int, int] | str:
+    """Resolve bleed color for a card.
+
+    Returns an (r,g,b) tuple for solid fills, or the literal string ``"edge"``
+    when the caller should sample the source image's outermost pixel.
+    """
+    if border_color in BORDER_COLOR_RGB:
+        return BORDER_COLOR_RGB[border_color]
+    if borderless_fill == "edge":
+        return "edge"
+    return BORDER_COLOR_RGB[borderless_fill]
+
 
 def _occupied_space(
     cardsize: np.ndarray,
@@ -27,7 +50,7 @@ def _occupied_space(
 
 
 def print_cards_matplotlib(
-    images: Sequence[str | Path],
+    images: Sequence[tuple[str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([8.27, 11.69]),
     cardsize: np.ndarray = np.array([2.5, 3.5]),
@@ -35,11 +58,14 @@ def print_cards_matplotlib(
     interpolation: str | None = "lanczos",
     dpi: int = 600,
     background_color: str | None = None,
+    bleed_mm: float = 0.0,
+    gutter_mm: float = 0.0,
+    borderless_fill: str = "edge",
 ) -> None:
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of image files
+        images: List of ``(image_path, border_color)`` tuples.
         filepath: Name of the pdf file
         papersize: Size of the paper in inches. Defaults to A4.
         cardsize: Size of a card in inches.
@@ -47,48 +73,79 @@ def print_cards_matplotlib(
         interpolation: Interpolation method for resizing images.
         dpi: Dots per inch for the output PDF.
         background_color: Background color of the PDF as name or hex code.
+        bleed_mm: Extend each card outward by this many mm, painted in the
+            card's border color.
+        gutter_mm: Space cards apart on the sheet by this many mm.
+        borderless_fill: Fill strategy for borderless cards.
     """
-    # Cards per figure
-    N = np.floor(papersize / cardsize).astype(int)
+    bleed = bleed_mm / 25.4
+    gutter = gutter_mm / 25.4
+    occupied_cardsize = cardsize + 2 * bleed
+
+    N = np.floor((papersize + gutter) / (occupied_cardsize + gutter)).astype(int)
     if N[0] == 0 or N[1] == 0:
         raise ValueError(f"Paper size too small: {papersize}")
-    offset = (papersize - _occupied_space(cardsize, N, border_crop, closed=True)) / 2
+    offset = (
+        papersize - _occupied_space(occupied_cardsize, N, border_crop, gutter=gutter, closed=True)
+    ) / 2
 
-    # Ensure directory exists
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    # Choose pdf of image saver
     saver = PdfPages if filepath.suffix == ".pdf" else SplitPages
 
     with saver(filepath) as saver, tqdm(total=len(images), desc="Plotting cards") as pbar:
         idx = 0
-        while idx < len(images):  # Loop over pages
+        while idx < len(images):
             fig = plt.figure(figsize=papersize)
-            ax = fig.add_axes((0, 0, 1, 1))  # ax covers the whole figure
-            #  Background
+            ax = fig.add_axes((0, 0, 1, 1))
             if background_color is not None:
                 plt.gca().add_patch(Rectangle((0, 0), 1, 1, color=background_color, zorder=-1000))
 
             for y in range(N[1]):
                 for x in range(N[0]):
                     if idx < len(images):
-                        img = plt.imread(images[idx])
+                        image_path, border_color = images[idx]
+                        img = plt.imread(image_path)
                         idx += 1
 
-                        # Crop left and top if not on border of sheet
-                        left = border_crop if x > 0 else 0
-                        top = border_crop if y > 0 else 0
+                        left = border_crop if x > 0 and gutter == 0 else 0
+                        top = border_crop if y > 0 and gutter == 0 else 0
                         img = img[top:, left:]
 
-                        # Compute extent
-                        lower = (offset + _occupied_space(cardsize, np.array([x, y]), border_crop)) / papersize
-                        upper = (
+                        lower = (
                             offset
-                            + _occupied_space(cardsize, np.array([x, y]), border_crop)
-                            + cardsize * (image_size - [left, top]) / image_size
+                            + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
                         ) / papersize
-                        extent = (lower[0], upper[0], 1 - upper[1], 1 - lower[1])  # flip y-axis
+                        card_upper = (
+                            offset
+                            + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
+                            + cardsize * (image_size - [left, top]) / image_size
+                            + 2 * bleed
+                        ) / papersize
+
+                        if bleed > 0:
+                            bleed_color = _resolve_bleed_color(border_color, borderless_fill)
+                            bleed_lower = lower
+                            bleed_upper = card_upper
+                            if bleed_color == "edge":
+                                edge_pixel = img[0, 0] / 255.0 if img.dtype.kind == "u" else img[0, 0]
+                                rect_color = tuple(float(c) for c in edge_pixel[:3])
+                            else:
+                                rect_color = tuple(c / 255.0 for c in bleed_color)
+                            plt.gca().add_patch(
+                                Rectangle(
+                                    (bleed_lower[0], 1 - bleed_upper[1]),
+                                    bleed_upper[0] - bleed_lower[0],
+                                    bleed_upper[1] - bleed_lower[1],
+                                    color=rect_color,
+                                    zorder=-500,
+                                )
+                            )
+
+                        image_lower = lower + (bleed / papersize)
+                        image_upper = card_upper - (bleed / papersize)
+                        extent = (image_lower[0], image_upper[0], 1 - image_upper[1], 1 - image_lower[1])
 
                         plt.imshow(
                             img,
@@ -100,8 +157,6 @@ def print_cards_matplotlib(
 
             plt.xlim(0, 1)
             plt.ylim(0, 1)
-
-            # Hide all axis ticks and labels
             ax.axis("off")
 
             saver.savefig(dpi=dpi)

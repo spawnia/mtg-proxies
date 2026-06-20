@@ -37,20 +37,24 @@ def test_print_cards_fpdf(example_images: list[str], tmp_path: Path) -> None:
     assert out_file.is_file()
 
 
-def test_print_cards_matplotlib_pdf(example_images: list[str], tmp_path: Path) -> None:
+def test_print_cards_matplotlib_pdf(
+    example_scans: list[tuple[str, str]], tmp_path: Path
+) -> None:
     from mtg_proxies import print_cards_matplotlib
 
     out_file = tmp_path / "decklist.pdf"
-    print_cards_matplotlib(example_images, out_file)
+    print_cards_matplotlib(example_scans, out_file)
 
     assert out_file.is_file()
 
 
-def test_print_cards_matplotlib_png(example_images: list[str], tmp_path: Path) -> None:
+def test_print_cards_matplotlib_png(
+    example_scans: list[tuple[str, str]], tmp_path: Path
+) -> None:
     from mtg_proxies import print_cards_matplotlib
 
     out_file = tmp_path / "decklist.png"
-    print_cards_matplotlib(example_images, out_file)
+    print_cards_matplotlib(example_scans, out_file)
 
     assert (tmp_path / "decklist_000.png").is_file()
 
@@ -93,3 +97,26 @@ def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
         closed=True,
     )
     assert np.allclose(result, np.array([3 * 2.5 + 2 * 0.5, 4 * 3.5 + 3 * 0.5]))
+
+
+def test_print_cards_matplotlib_with_bleed_and_gutter(
+    example_scans: list[tuple[str, str]], tmp_path: Path
+) -> None:
+    from mtg_proxies import print_cards_matplotlib
+
+    out_file = tmp_path / "decklist_bleed.png"
+    print_cards_matplotlib(example_scans, out_file, bleed_mm=3.0, gutter_mm=5.0)
+
+    assert (tmp_path / "decklist_bleed_000.png").is_file()
+
+
+def test_print_cards_matplotlib_with_borderless_fill_black(
+    example_scans: list[tuple[str, str]], tmp_path: Path
+) -> None:
+    from mtg_proxies import print_cards_matplotlib
+
+    fake_scans: list[tuple[str, str]] = [(path, "borderless") for path, _ in example_scans]
+    out_file = tmp_path / "decklist_borderless.png"
+    print_cards_matplotlib(fake_scans, out_file, bleed_mm=3.0, borderless_fill="black")
+
+    assert (tmp_path / "decklist_borderless_000.png").is_file()
