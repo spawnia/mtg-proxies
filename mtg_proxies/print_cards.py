@@ -164,43 +164,53 @@ def print_cards_matplotlib(
 
 
 def print_cards_fpdf(
-    images: Sequence[str | Path],
+    images: Sequence[tuple[str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([210, 297]),
     cardsize: np.ndarray = np.array([2.5 * 25.4, 3.5 * 25.4]),
     border_crop: int = 14,
     background_color: tuple[int, int, int] | None = None,
     cropmarks: bool = True,
+    bleed_mm: float = 0.0,
+    gutter_mm: float = 0.0,
+    borderless_fill: str = "edge",
 ) -> None:
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of image files
+        images: List of ``(image_path, border_color)`` tuples.
         filepath: Name of the pdf file
-        papersize: Size of the paper in inches. Defaults to A4.
-        cardsize: Size of a card in inches.
-        border_crop: How many pixel to crop from the border of each card.
+        papersize: Size of the paper in mm. Defaults to A4.
+        cardsize: Size of a card in mm.
+        border_crop: How many pixels to crop from the border of each card.
         background_color: Background color of the PDF as an RGB tuple.
         cropmarks: Whether to add crop marks to the PDF.
+        bleed_mm: Extend each card outward by this many mm, painted in the
+            card's border color.
+        gutter_mm: Space cards apart on the sheet by this many mm.
+        borderless_fill: Fill strategy for borderless cards.
     """
     from fpdf import FPDF
 
-    # Cards per sheet
-    N = np.floor(papersize / cardsize).astype(int)
+    bleed = float(bleed_mm)
+    gutter = float(gutter_mm)
+    occupied_cardsize = cardsize + 2 * bleed
+
+    N = np.floor((papersize + gutter) / (occupied_cardsize + gutter)).astype(int)
     if N[0] == 0 or N[1] == 0:
         raise ValueError(f"Paper size too small: {papersize}")
     cards_per_sheet = np.prod(N)
-    offset = (papersize - _occupied_space(cardsize, N, border_crop, closed=True)) / 2
+    offset = (
+        papersize - _occupied_space(occupied_cardsize, N, border_crop, gutter=gutter, closed=True)
+    ) / 2
 
-    # Ensure directory exists
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
 
-    # Initialize PDF
     pdf = FPDF(orientation="P", unit="mm", format="A4")
 
-    for i, image in enumerate(tqdm(images, desc="Plotting cards")):
-        if i % cards_per_sheet == 0:  # Startign a new sheet
+    for i, (image, border_color) in enumerate(tqdm(images, desc="Plotting cards")):
+        if i % cards_per_sheet == 0:
             pdf.add_page()
             if background_color is not None:
                 pdf.set_fill_color(*background_color)
@@ -209,9 +219,8 @@ def print_cards_fpdf(
         x = (i % cards_per_sheet) % N[0]
         y = (i % cards_per_sheet) // N[0]
 
-        # Crop left and top if not on border of sheet
-        left = border_crop if x > 0 else 0
-        top = border_crop if y > 0 else 0
+        left = border_crop if x > 0 and gutter == 0 else 0
+        top = border_crop if y > 0 and gutter == 0 else 0
 
         if left == 0 and top == 0:
             cropped_image = image
@@ -219,25 +228,31 @@ def print_cards_fpdf(
             path = Path(image)
             cropped_image = str(path.parent / (path.stem + f"_{left}_{top}" + path.suffix))
             if not Path(cropped_image).is_file():
-                # Crop image
                 plt.imsave(cropped_image, plt.imread(image)[top:, left:])
 
-        # Compute extent
-        lower = offset + _occupied_space(cardsize, np.array([x, y]), border_crop)
+        lower = offset + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
         size = cardsize * (image_size - [left, top]) / image_size
 
-        # Plot image
-        pdf.image(cropped_image, x=lower[0], y=lower[1], w=size[0], h=size[1])
+        if bleed > 0:
+            bleed_color = _resolve_bleed_color(border_color, borderless_fill)
+            if bleed_color == "edge":
+                edge_pixel = plt.imread(image)[0, 0]
+                edge_rgb = tuple(int(round(float(c) * 255)) if edge_pixel.dtype.kind == "f" else int(c) for c in edge_pixel[:3])
+                pdf.set_fill_color(*edge_rgb)
+            else:
+                pdf.set_fill_color(*bleed_color)
+            pdf.rect(lower[0], lower[1], size[0] + 2 * bleed, size[1] + 2 * bleed, "F")
+
+        pdf.image(cropped_image, x=lower[0] + bleed, y=lower[1] + bleed, w=size[0], h=size[1])
 
         if cropmarks and ((i + 1) % cards_per_sheet == 0 or i + 1 == len(images)):
-            # If this was the last card on a page, add crop marks
             pdf.set_line_width(0.05)
             pdf.set_draw_color(255, 255, 255)
-            a = cardsize * (image_size - 2 * border_crop) / image_size
-            b = papersize - N * a
-            for x in range(N[0] + 1):
-                for y in range(N[1] + 1):
-                    mark = b / 2 + a * [x, y]
+            a = (cardsize * (image_size - 2 * border_crop) / image_size) + 2 * bleed + gutter
+            b = papersize - N * a + gutter
+            for cx in range(N[0] + 1):
+                for cy in range(N[1] + 1):
+                    mark = b / 2 + a * [cx, cy]
                     pdf.line(mark[0] - 0.5, mark[1], mark[0] + 0.5, mark[1])
                     pdf.line(mark[0], mark[1] - 0.5, mark[0], mark[1] + 0.5)
 

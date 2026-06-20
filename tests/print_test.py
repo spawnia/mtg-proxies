@@ -28,11 +28,11 @@ def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str]]) -> Non
     assert all(isinstance(t[0], str) and isinstance(t[1], str) for t in example_scans)
 
 
-def test_print_cards_fpdf(example_images: list[str], tmp_path: Path) -> None:
+def test_print_cards_fpdf(example_scans: list[tuple[str, str]], tmp_path: Path) -> None:
     from mtg_proxies import print_cards_fpdf
 
     out_file = tmp_path / "decklist.pdf"
-    print_cards_fpdf(example_images, out_file)
+    print_cards_fpdf(example_scans, out_file)
 
     assert out_file.is_file()
 
@@ -120,3 +120,14 @@ def test_print_cards_matplotlib_with_borderless_fill_black(
     print_cards_matplotlib(fake_scans, out_file, bleed_mm=3.0, borderless_fill="black")
 
     assert (tmp_path / "decklist_borderless_000.png").is_file()
+
+
+def test_print_cards_fpdf_with_bleed_and_gutter(
+    example_scans: list[tuple[str, str]], tmp_path: Path
+) -> None:
+    from mtg_proxies import print_cards_fpdf
+
+    out_file = tmp_path / "decklist_bleed.pdf"
+    print_cards_fpdf(example_scans, out_file, bleed_mm=3.0, gutter_mm=5.0)
+
+    assert out_file.is_file()
