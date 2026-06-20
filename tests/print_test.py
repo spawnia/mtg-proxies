@@ -131,3 +131,55 @@ def test_print_cards_fpdf_with_bleed_and_gutter(
     print_cards_fpdf(example_scans, out_file, bleed_mm=3.0, gutter_mm=5.0)
 
     assert out_file.is_file()
+
+
+def test_crop_mark_positions_zero_gutter_grid() -> None:
+    from mtg_proxies.print_cards import _crop_mark_positions
+    import numpy as np
+
+    marks = _crop_mark_positions(
+        N=np.array([1, 1]),
+        papersize=np.array([210.0, 297.0]),
+        cardsize=np.array([63.5, 88.9]),
+        border_crop=0,
+        bleed=0.0,
+        gutter=0.0,
+        offset=np.array([0.0, 0.0]),
+    )
+    expected = np.array(
+        [
+            [73.25, 104.05],
+            [73.25, 192.95],
+            [136.75, 104.05],
+            [136.75, 192.95],
+        ]
+    )
+    assert np.allclose(marks, expected)
+
+
+def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
+    from mtg_proxies.print_cards import _crop_mark_positions
+    import numpy as np
+
+    marks = _crop_mark_positions(
+        N=np.array([2, 1]),
+        papersize=np.array([210.0, 297.0]),
+        cardsize=np.array([63.5, 88.9]),
+        border_crop=0,
+        bleed=3.0,
+        gutter=5.0,
+        offset=np.array([33.0, 101.05]),
+    )
+    expected = np.array(
+        [
+            [36.0, 104.05],
+            [36.0, 192.95],
+            [99.5, 104.05],
+            [99.5, 192.95],
+            [110.5, 104.05],
+            [110.5, 192.95],
+            [174.0, 104.05],
+            [174.0, 192.95],
+        ]
+    )
+    assert np.allclose(marks, expected)

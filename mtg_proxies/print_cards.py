@@ -49,6 +49,39 @@ def _occupied_space(
     return image_term + gutter_term
 
 
+def _crop_mark_positions(
+    N: np.ndarray,
+    papersize: np.ndarray,
+    cardsize: np.ndarray,
+    border_crop: int,
+    bleed: float,
+    gutter: float,
+    offset: np.ndarray,
+) -> np.ndarray:
+    """Positions of crop-mark crosses for a sheet, as an ``(M, 2)`` array.
+
+    With no gutter, cards abut and marks sit on the shared grid lines. With a
+    gutter, each card is cut individually, so marks sit at every card's four
+    cut-box corners.
+    """
+    if gutter == 0:
+        a = (cardsize * (image_size - 2 * border_crop) / image_size) + 2 * bleed
+        b = papersize - N * a
+        return np.array([b / 2 + a * np.array([cx, cy]) for cx in range(N[0] + 1) for cy in range(N[1] + 1)])
+
+    occupied_cardsize = cardsize + 2 * bleed
+    marks = []
+    for gx in range(N[0]):
+        for gy in range(N[1]):
+            lower = offset + _occupied_space(occupied_cardsize, np.array([gx, gy]), border_crop, gutter=gutter)
+            card_lower = lower + bleed
+            card_upper = card_lower + cardsize
+            for mx in (card_lower[0], card_upper[0]):
+                for my in (card_lower[1], card_upper[1]):
+                    marks.append(np.array([mx, my]))
+    return np.array(marks)
+
+
 def print_cards_matplotlib(
     images: Sequence[tuple[str, str]],
     filepath: str | Path,
@@ -69,7 +102,7 @@ def print_cards_matplotlib(
         filepath: Name of the pdf file
         papersize: Size of the paper in inches. Defaults to A4.
         cardsize: Size of a card in inches.
-        border_crop: How many pixel to crop from the border of each card.
+        border_crop: How many pixels to crop from the border of each card.
         interpolation: Interpolation method for resizing images.
         dpi: Dots per inch for the output PDF.
         background_color: Background color of the PDF as name or hex code.
@@ -236,7 +269,7 @@ def print_cards_fpdf(
         if bleed > 0:
             bleed_color = _resolve_bleed_color(border_color, borderless_fill)
             if bleed_color == "edge":
-                edge_pixel = plt.imread(image)[0, 0]
+                edge_pixel = plt.imread(cropped_image)[0, 0]
                 edge_rgb = tuple(int(round(float(c) * 255)) if edge_pixel.dtype.kind == "f" else int(c) for c in edge_pixel[:3])
                 pdf.set_fill_color(*edge_rgb)
             else:
@@ -248,13 +281,9 @@ def print_cards_fpdf(
         if cropmarks and ((i + 1) % cards_per_sheet == 0 or i + 1 == len(images)):
             pdf.set_line_width(0.05)
             pdf.set_draw_color(255, 255, 255)
-            a = (cardsize * (image_size - 2 * border_crop) / image_size) + 2 * bleed + gutter
-            b = papersize - N * a + gutter
-            for cx in range(N[0] + 1):
-                for cy in range(N[1] + 1):
-                    mark = b / 2 + a * [cx, cy]
-                    pdf.line(mark[0] - 0.5, mark[1], mark[0] + 0.5, mark[1])
-                    pdf.line(mark[0], mark[1] - 0.5, mark[0], mark[1] + 0.5)
+            for mark in _crop_mark_positions(N, papersize, cardsize, border_crop, bleed, gutter, offset):
+                pdf.line(mark[0] - 0.5, mark[1], mark[0] + 0.5, mark[1])
+                pdf.line(mark[0], mark[1] - 0.5, mark[0], mark[1] + 0.5)
 
     tqdm.write(f"Writing to {filepath}")
     pdf.output(filepath)
