@@ -183,3 +183,30 @@ def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
         ]
     )
     assert np.allclose(marks, expected)
+
+
+def test_sample_edge_color_ignores_transparent_corner() -> None:
+    import numpy as np
+    from mtg_proxies.print_cards import _sample_edge_color
+
+    img = np.ones((10, 8, 4), dtype=float)
+    img[:, 0] = [0.086, 0.075, 0.055, 1.0]
+    img[0, 0] = [1.0, 1.0, 1.0, 0.0]
+
+    assert np.allclose(_sample_edge_color(img), [0.086, 0.075, 0.055])
+
+
+def test_resolve_bleed_color_bordered_card_samples_edge() -> None:
+    from mtg_proxies.print_cards import _resolve_bleed_color
+
+    assert _resolve_bleed_color("black", "edge") == "edge"
+    assert _resolve_bleed_color("white", "edge") == "edge"
+    assert _resolve_bleed_color("gold", "black") == "edge"
+
+
+def test_resolve_bleed_color_borderless_respects_fill() -> None:
+    from mtg_proxies.print_cards import _resolve_bleed_color, BORDER_COLOR_RGB
+
+    assert _resolve_bleed_color("borderless", "edge") == "edge"
+    assert _resolve_bleed_color("borderless", "black") == BORDER_COLOR_RGB["black"]
+    assert _resolve_bleed_color("borderless", "white") == BORDER_COLOR_RGB["white"]

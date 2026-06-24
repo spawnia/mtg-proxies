@@ -16,8 +16,6 @@ image_size = np.array([745, 1040])
 BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
     "black": (0, 0, 0),
     "white": (255, 255, 255),
-    "silver": (192, 192, 192),
-    "gold": (212, 175, 55),
 }
 
 
@@ -25,16 +23,29 @@ def _resolve_bleed_color(
     border_color: str,
     borderless_fill: str,
 ) -> tuple[int, int, int] | str:
-    """Resolve bleed color for a card.
+    """Resolve the bleed fill for a card.
 
-    Returns an (r,g,b) tuple for solid fills, or the literal string ``"edge"``
-    when the caller should sample the source image's outermost pixel.
+    Bordered cards replicate their own scanned border via edge sampling, so the
+    bleed matches each scan exactly — older non-digital scans are not pure black.
+    Borderless cards also default to edge replication, but can be forced to a
+    solid fill.
+
+    Returns an ``(r, g, b)`` tuple for a solid fill, or the literal string
+    ``"edge"`` when the caller should sample the scan's border.
     """
-    if border_color in BORDER_COLOR_RGB:
-        return BORDER_COLOR_RGB[border_color]
-    if borderless_fill == "edge":
-        return "edge"
-    return BORDER_COLOR_RGB[borderless_fill]
+    if border_color == "borderless" and borderless_fill != "edge":
+        return BORDER_COLOR_RGB[borderless_fill]
+    return "edge"
+
+
+def _sample_edge_color(img: np.ndarray) -> np.ndarray:
+    """Sample a card's border color from the midpoint of its left edge.
+
+    Scryfall scans have transparent rounded corners, so the corner pixel is not
+    a reliable border sample; the edge midpoint lies on the straight, opaque
+    part of the border.
+    """
+    return img[img.shape[0] // 2, 0][:3]
 
 
 def _occupied_space(
@@ -162,8 +173,10 @@ def print_cards_matplotlib(
                             bleed_lower = lower
                             bleed_upper = card_upper
                             if bleed_color == "edge":
-                                edge_pixel = img[0, 0] / 255.0 if img.dtype.kind == "u" else img[0, 0]
-                                rect_color = tuple(float(c) for c in edge_pixel[:3])
+                                edge_pixel = _sample_edge_color(img)
+                                rect_color = tuple(
+                                    float(c) / 255.0 if img.dtype.kind == "u" else float(c) for c in edge_pixel
+                                )
                             else:
                                 rect_color = tuple(c / 255.0 for c in bleed_color)
                             plt.gca().add_patch(
@@ -269,8 +282,11 @@ def print_cards_fpdf(
         if bleed > 0:
             bleed_color = _resolve_bleed_color(border_color, borderless_fill)
             if bleed_color == "edge":
-                edge_pixel = plt.imread(cropped_image)[0, 0]
-                edge_rgb = tuple(int(round(float(c) * 255)) if edge_pixel.dtype.kind == "f" else int(c) for c in edge_pixel[:3])
+                edge_img = plt.imread(cropped_image)
+                edge_pixel = _sample_edge_color(edge_img)
+                edge_rgb = tuple(
+                    int(round(float(c) * 255)) if edge_img.dtype.kind == "f" else int(c) for c in edge_pixel
+                )
                 pdf.set_fill_color(*edge_rgb)
             else:
                 pdf.set_fill_color(*bleed_color)
