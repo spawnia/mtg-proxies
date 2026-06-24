@@ -438,6 +438,40 @@ def print_cards_fpdf(
         x = (i % cards_per_sheet) % N[0]
         y = (i % cards_per_sheet) // N[0]
 
+        if _should_synthesize(frame, bleed):
+            img = plt.imread(image)
+            reference = _estimate_border_color(img)
+            content_box = _detect_content_box(img, reference)
+            if _content_box_plausible(content_box, img.shape):
+                height, width = img.shape[:2]
+                crop_left, crop_top, crop_right, crop_bottom = content_box
+                lower = offset + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
+
+                pdf.set_fill_color(*_resolve_synthetic_color(img, border_color))
+                pdf.rect(lower[0], lower[1], cardsize[0] + 2 * bleed, cardsize[1] + 2 * bleed, "F")
+
+                source = Path(image)
+                crop_path = str(
+                    source.parent
+                    / (source.stem + f"_content_{crop_left}_{crop_top}_{crop_right}_{crop_bottom}" + source.suffix)
+                )
+                if not Path(crop_path).is_file():
+                    plt.imsave(crop_path, img[crop_top : height - crop_bottom, crop_left : width - crop_right])
+
+                content_x = lower[0] + bleed + (crop_left / width) * cardsize[0]
+                content_y = lower[1] + bleed + (crop_top / height) * cardsize[1]
+                content_w = ((width - crop_left - crop_right) / width) * cardsize[0]
+                content_h = ((height - crop_top - crop_bottom) / height) * cardsize[1]
+                pdf.image(crop_path, x=content_x, y=content_y, w=content_w, h=content_h)
+
+                if cropmarks and ((i + 1) % cards_per_sheet == 0 or i + 1 == len(images)):
+                    pdf.set_line_width(0.05)
+                    pdf.set_draw_color(255, 255, 255)
+                    for mark in _crop_mark_positions(N, papersize, cardsize, border_crop, bleed, gutter, offset):
+                        pdf.line(mark[0] - 0.5, mark[1], mark[0] + 0.5, mark[1])
+                        pdf.line(mark[0], mark[1] - 0.5, mark[0], mark[1] + 0.5)
+                continue
+
         left = border_crop if x > 0 and gutter == 0 else 0
         top = border_crop if y > 0 and gutter == 0 else 0
 
