@@ -325,3 +325,27 @@ def test_resolve_synthetic_color_sampled_ignores_border_name() -> None:
     img[..., 3] = 1.0
 
     assert _resolve_synthetic_color(img, "black", strategy="sampled") == (26, 26, 26)
+
+
+def test_matplotlib_synthesizes_for_old_frame(
+    example_scans: list[tuple[str, str, str]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mtg_proxies.print_cards as pc
+    from mtg_proxies import print_cards_matplotlib
+
+    calls: list[tuple[int, int, int, int]] = []
+    real_detect = pc._detect_content_box
+
+    def spy(img, reference, **kwargs) -> tuple[int, int, int, int]:  # noqa: ANN001, ANN003
+        box = real_detect(img, reference, **kwargs)
+        calls.append(box)
+        return box
+
+    monkeypatch.setattr(pc, "_detect_content_box", spy)
+
+    old_frame_scans = [(path, "black", "1993") for path, _, _ in example_scans]
+    out_file = tmp_path / "synth.png"
+    print_cards_matplotlib(old_frame_scans, out_file, bleed_mm=3.0)
+
+    assert (tmp_path / "synth_000.png").is_file()
+    assert len(calls) == len(old_frame_scans)

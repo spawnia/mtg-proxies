@@ -280,6 +280,52 @@ def print_cards_matplotlib(
                         img = plt.imread(image_path)
                         idx += 1
 
+                        base = offset + _occupied_space(
+                            occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter
+                        )
+                        synthesize = _should_synthesize(frame, bleed)
+                        content_box = None
+                        if synthesize:
+                            reference = _estimate_border_color(img)
+                            content_box = _detect_content_box(img, reference)
+                            synthesize = _content_box_plausible(content_box, img.shape)
+
+                        if synthesize:
+                            height, width = img.shape[:2]
+                            crop_left, crop_top, crop_right, crop_bottom = content_box
+                            footprint_lower = base / papersize
+                            footprint_upper = (base + cardsize + 2 * bleed) / papersize
+                            card_lower = (base + bleed) / papersize
+                            card_upper_nb = (base + bleed + cardsize) / papersize
+
+                            synth_rgb = tuple(c / 255.0 for c in _resolve_synthetic_color(img, border_color))
+                            plt.gca().add_patch(
+                                Rectangle(
+                                    (footprint_lower[0], 1 - footprint_upper[1]),
+                                    footprint_upper[0] - footprint_lower[0],
+                                    footprint_upper[1] - footprint_lower[1],
+                                    color=synth_rgb,
+                                    zorder=-500,
+                                )
+                            )
+
+                            fx0, fx1 = crop_left / width, (width - crop_right) / width
+                            fy0, fy1 = crop_top / height, (height - crop_bottom) / height
+                            span = card_upper_nb - card_lower
+                            cx0 = card_lower[0] + fx0 * span[0]
+                            cx1 = card_lower[0] + fx1 * span[0]
+                            top_norm = card_lower[1] + fy0 * span[1]
+                            bot_norm = card_lower[1] + fy1 * span[1]
+                            crop = img[crop_top : height - crop_bottom, crop_left : width - crop_right]
+                            plt.imshow(
+                                crop,
+                                extent=(cx0, cx1, 1 - bot_norm, 1 - top_norm),
+                                aspect=papersize[1] / papersize[0],
+                                interpolation=interpolation,
+                            )
+                            pbar.update(1)
+                            continue
+
                         left = border_crop if x > 0 and gutter == 0 else 0
                         top = border_crop if y > 0 and gutter == 0 else 0
                         img = img[top:, left:]
