@@ -16,25 +16,163 @@ image_size = np.array([745, 1040])
 BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
     "black": (0, 0, 0),
     "white": (255, 255, 255),
-    "silver": (192, 192, 192),
-    "gold": (212, 175, 55),
 }
+
+OLD_FRAMES = frozenset({"1993", "1997", "2003"})
+
+SYNTHETIC_COLOR_STRATEGY = "canonical"  # or "sampled"; winner pinned by manual print A/B
+
+
+def _should_synthesize(frame: str, bleed: float) -> bool:
+    """Decide whether to synthesize a clean border for a card.
+
+    Synthesis only helps old-frame scans (noisy border, clean rectangular
+    inner content box) and only matters when bleed is being painted.
+    """
+    return bleed > 0 and frame in OLD_FRAMES
 
 
 def _resolve_bleed_color(
     border_color: str,
     borderless_fill: str,
 ) -> tuple[int, int, int] | str:
-    """Resolve bleed color for a card.
+    """Resolve the bleed fill for a card.
 
-    Returns an (r,g,b) tuple for solid fills, or the literal string ``"edge"``
-    when the caller should sample the source image's outermost pixel.
+    Bordered cards replicate their own scanned border via edge sampling, so the
+    bleed matches each scan exactly — older non-digital scans are not pure black.
+    Borderless cards also default to edge replication, but can be forced to a
+    solid fill.
+
+    Returns an ``(r, g, b)`` tuple for a solid fill, or the literal string
+    ``"edge"`` when the caller should sample the scan's border.
     """
-    if border_color in BORDER_COLOR_RGB:
+    if border_color == "borderless" and borderless_fill != "edge":
+        return BORDER_COLOR_RGB[borderless_fill]
+    return "edge"
+
+
+def _normalize(img: np.ndarray) -> np.ndarray:
+    """Return image data as float in ``[0, 1]`` regardless of source dtype."""
+    arr = img.astype(float)
+    if img.dtype.kind in "ui":
+        arr = arr / 255.0
+    return arr
+
+
+def _opaque_mask(arr: np.ndarray) -> np.ndarray:
+    """Boolean mask of non-transparent pixels (all-True when no alpha channel)."""
+    if arr.shape[2] == 4:
+        return arr[..., 3] > 0.5
+    return np.ones(arr.shape[:2], dtype=bool)
+
+
+def _central_band(length: int, fraction: float) -> tuple[int, int]:
+    """Index range covering the central ``fraction`` of ``length``."""
+    margin = int(length * (1 - fraction) / 2)
+    return margin, length - margin
+
+
+def _has_run(mask: np.ndarray, min_run: int) -> bool:
+    """Whether ``mask`` contains a contiguous True run of at least ``min_run``."""
+    run = 0
+    for value in mask:
+        run = run + 1 if value else 0
+        if run >= min_run:
+            return True
+    return False
+
+
+def _estimate_border_color(img: np.ndarray, band: int = 4, central_fraction: float = 0.6) -> np.ndarray:
+    """Estimate the border color as the per-channel median of the outer ring.
+
+    Samples only opaque pixels in thin edge bands over the central fraction of
+    each side, dodging the transparent rounded corners and rejecting stray scan
+    dots by majority. Returns normalized ``[0, 1]`` RGB.
+    """
+    arr = _normalize(img)
+    height, width = arr.shape[:2]
+    opaque = _opaque_mask(arr)
+    cy0, cy1 = _central_band(height, central_fraction)
+    cx0, cx1 = _central_band(width, central_fraction)
+    regions = [
+        (slice(0, band), slice(cx0, cx1)),
+        (slice(height - band, height), slice(cx0, cx1)),
+        (slice(cy0, cy1), slice(0, band)),
+        (slice(cy0, cy1), slice(width - band, width)),
+    ]
+    samples = [arr[rs, cs][opaque[rs, cs]] for rs, cs in regions]
+    stacked = np.concatenate(samples)
+    return np.median(stacked[:, :3], axis=0)
+
+
+def _resolve_synthetic_color(
+    img: np.ndarray,
+    border_color: str,
+    strategy: str = SYNTHETIC_COLOR_STRATEGY,
+) -> tuple[int, int, int]:
+    """Resolve the synthetic border color as a 0-255 RGB tuple.
+
+    ``canonical`` maps black/white to pure values and samples everything else;
+    ``sampled`` always uses the ring-median estimate.
+    """
+    if strategy == "canonical" and border_color in BORDER_COLOR_RGB:
         return BORDER_COLOR_RGB[border_color]
-    if borderless_fill == "edge":
-        return "edge"
-    return BORDER_COLOR_RGB[borderless_fill]
+    sampled = _estimate_border_color(img)
+    r, g, b = (int(round(c * 255)) for c in sampled)
+    return (r, g, b)
+
+
+def _detect_content_box(
+    img: np.ndarray,
+    reference: np.ndarray,
+    tolerance: float = 0.18,
+    min_run: int = 3,
+    central_fraction: float = 0.6,
+) -> tuple[int, int, int, int]:
+    """Detect the tightest content box as ``(left, top, right, bottom)`` insets.
+
+    Per side, scan inward and take the closest line where *substantial* content
+    appears - a contiguous run of at least ``min_run`` opaque pixels deviating
+    from ``reference`` by more than ``tolerance`` (in ``[0, 1]``). Sampling the
+    central fraction of the opposite dimension dodges the rounded corners; the
+    run requirement rejects isolated scan dots. Taking the closest line keeps
+    protrusions (e.g. loyalty badges) inside the box, never clipped.
+    """
+    arr = _normalize(img)
+    height, width = arr.shape[:2]
+    opaque = _opaque_mask(arr)
+    ref = np.asarray(reference, dtype=float)
+    deviates = (np.abs(arr[..., :3] - ref).max(axis=2) > tolerance) & opaque
+    cx0, cx1 = _central_band(width, central_fraction)
+    cy0, cy1 = _central_band(height, central_fraction)
+
+    left = next((c for c in range(width) if _has_run(deviates[cy0:cy1, c], min_run)), width)
+    right_col = next((c for c in range(width - 1, -1, -1) if _has_run(deviates[cy0:cy1, c], min_run)), -1)
+    top = next((r for r in range(height) if _has_run(deviates[r, cx0:cx1], min_run)), height)
+    bottom_row = next((r for r in range(height - 1, -1, -1) if _has_run(deviates[r, cx0:cx1], min_run)), -1)
+    return left, top, width - 1 - right_col, height - 1 - bottom_row
+
+
+def _content_box_plausible(
+    box: tuple[int, int, int, int],
+    img_shape: tuple[int, ...],
+    floor_fraction: float = 0.02,
+) -> bool:
+    """Reject full-art/borderless detections where 3+ sides hug the edge."""
+    height, width = img_shape[:2]
+    floor = floor_fraction * min(height, width)
+    small_sides = sum(inset < floor for inset in box)
+    return small_sides < 3
+
+
+def _sample_edge_color(img: np.ndarray) -> np.ndarray:
+    """Sample a card's border color from the midpoint of its left edge.
+
+    Scryfall scans have transparent rounded corners, so the corner pixel is not
+    a reliable border sample; the edge midpoint lies on the straight, opaque
+    part of the border.
+    """
+    return img[img.shape[0] // 2, 0][:3]
 
 
 def _occupied_space(
@@ -83,7 +221,7 @@ def _crop_mark_positions(
 
 
 def print_cards_matplotlib(
-    images: Sequence[tuple[str, str]],
+    images: Sequence[tuple[str, str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([8.27, 11.69]),
     cardsize: np.ndarray = np.array([2.5, 3.5]),
@@ -98,7 +236,7 @@ def print_cards_matplotlib(
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of ``(image_path, border_color)`` tuples.
+        images: List of ``(image_path, border_color, frame)`` tuples.
         filepath: Name of the pdf file
         papersize: Size of the paper in inches. Defaults to A4.
         cardsize: Size of a card in inches.
@@ -138,9 +276,55 @@ def print_cards_matplotlib(
             for y in range(N[1]):
                 for x in range(N[0]):
                     if idx < len(images):
-                        image_path, border_color = images[idx]
+                        image_path, border_color, frame = images[idx]
                         img = plt.imread(image_path)
                         idx += 1
+
+                        base = offset + _occupied_space(
+                            occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter
+                        )
+                        synthesize = _should_synthesize(frame, bleed)
+                        content_box = None
+                        if synthesize:
+                            reference = _estimate_border_color(img)
+                            content_box = _detect_content_box(img, reference)
+                            synthesize = _content_box_plausible(content_box, img.shape)
+
+                        if synthesize:
+                            height, width = img.shape[:2]
+                            crop_left, crop_top, crop_right, crop_bottom = content_box
+                            footprint_lower = base / papersize
+                            footprint_upper = (base + cardsize + 2 * bleed) / papersize
+                            card_lower = (base + bleed) / papersize
+                            card_upper_nb = (base + bleed + cardsize) / papersize
+
+                            synth_rgb = tuple(c / 255.0 for c in _resolve_synthetic_color(img, border_color))
+                            plt.gca().add_patch(
+                                Rectangle(
+                                    (footprint_lower[0], 1 - footprint_upper[1]),
+                                    footprint_upper[0] - footprint_lower[0],
+                                    footprint_upper[1] - footprint_lower[1],
+                                    color=synth_rgb,
+                                    zorder=-500,
+                                )
+                            )
+
+                            fx0, fx1 = crop_left / width, (width - crop_right) / width
+                            fy0, fy1 = crop_top / height, (height - crop_bottom) / height
+                            span = card_upper_nb - card_lower
+                            cx0 = card_lower[0] + fx0 * span[0]
+                            cx1 = card_lower[0] + fx1 * span[0]
+                            top_norm = card_lower[1] + fy0 * span[1]
+                            bot_norm = card_lower[1] + fy1 * span[1]
+                            crop = img[crop_top : height - crop_bottom, crop_left : width - crop_right]
+                            plt.imshow(
+                                crop,
+                                extent=(cx0, cx1, 1 - bot_norm, 1 - top_norm),
+                                aspect=papersize[1] / papersize[0],
+                                interpolation=interpolation,
+                            )
+                            pbar.update(1)
+                            continue
 
                         left = border_crop if x > 0 and gutter == 0 else 0
                         top = border_crop if y > 0 and gutter == 0 else 0
@@ -162,8 +346,10 @@ def print_cards_matplotlib(
                             bleed_lower = lower
                             bleed_upper = card_upper
                             if bleed_color == "edge":
-                                edge_pixel = img[0, 0] / 255.0 if img.dtype.kind == "u" else img[0, 0]
-                                rect_color = tuple(float(c) for c in edge_pixel[:3])
+                                edge_pixel = _sample_edge_color(img)
+                                rect_color = tuple(
+                                    float(c) / 255.0 if img.dtype.kind == "u" else float(c) for c in edge_pixel
+                                )
                             else:
                                 rect_color = tuple(c / 255.0 for c in bleed_color)
                             plt.gca().add_patch(
@@ -197,7 +383,7 @@ def print_cards_matplotlib(
 
 
 def print_cards_fpdf(
-    images: Sequence[tuple[str, str]],
+    images: Sequence[tuple[str, str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([210, 297]),
     cardsize: np.ndarray = np.array([2.5 * 25.4, 3.5 * 25.4]),
@@ -211,7 +397,7 @@ def print_cards_fpdf(
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of ``(image_path, border_color)`` tuples.
+        images: List of ``(image_path, border_color, frame)`` tuples.
         filepath: Name of the pdf file
         papersize: Size of the paper in mm. Defaults to A4.
         cardsize: Size of a card in mm.
@@ -242,7 +428,7 @@ def print_cards_fpdf(
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
 
-    for i, (image, border_color) in enumerate(tqdm(images, desc="Plotting cards")):
+    for i, (image, border_color, frame) in enumerate(tqdm(images, desc="Plotting cards")):
         if i % cards_per_sheet == 0:
             pdf.add_page()
             if background_color is not None:
@@ -251,6 +437,40 @@ def print_cards_fpdf(
 
         x = (i % cards_per_sheet) % N[0]
         y = (i % cards_per_sheet) // N[0]
+
+        if _should_synthesize(frame, bleed):
+            img = plt.imread(image)
+            reference = _estimate_border_color(img)
+            content_box = _detect_content_box(img, reference)
+            if _content_box_plausible(content_box, img.shape):
+                height, width = img.shape[:2]
+                crop_left, crop_top, crop_right, crop_bottom = content_box
+                lower = offset + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
+
+                pdf.set_fill_color(*_resolve_synthetic_color(img, border_color))
+                pdf.rect(lower[0], lower[1], cardsize[0] + 2 * bleed, cardsize[1] + 2 * bleed, "F")
+
+                source = Path(image)
+                crop_path = str(
+                    source.parent
+                    / (source.stem + f"_content_{crop_left}_{crop_top}_{crop_right}_{crop_bottom}" + source.suffix)
+                )
+                if not Path(crop_path).is_file():
+                    plt.imsave(crop_path, img[crop_top : height - crop_bottom, crop_left : width - crop_right])
+
+                content_x = lower[0] + bleed + (crop_left / width) * cardsize[0]
+                content_y = lower[1] + bleed + (crop_top / height) * cardsize[1]
+                content_w = ((width - crop_left - crop_right) / width) * cardsize[0]
+                content_h = ((height - crop_top - crop_bottom) / height) * cardsize[1]
+                pdf.image(crop_path, x=content_x, y=content_y, w=content_w, h=content_h)
+
+                if cropmarks and ((i + 1) % cards_per_sheet == 0 or i + 1 == len(images)):
+                    pdf.set_line_width(0.05)
+                    pdf.set_draw_color(255, 255, 255)
+                    for mark in _crop_mark_positions(N, papersize, cardsize, border_crop, bleed, gutter, offset):
+                        pdf.line(mark[0] - 0.5, mark[1], mark[0] + 0.5, mark[1])
+                        pdf.line(mark[0], mark[1] - 0.5, mark[0], mark[1] + 0.5)
+                continue
 
         left = border_crop if x > 0 and gutter == 0 else 0
         top = border_crop if y > 0 and gutter == 0 else 0
@@ -269,8 +489,11 @@ def print_cards_fpdf(
         if bleed > 0:
             bleed_color = _resolve_bleed_color(border_color, borderless_fill)
             if bleed_color == "edge":
-                edge_pixel = plt.imread(cropped_image)[0, 0]
-                edge_rgb = tuple(int(round(float(c) * 255)) if edge_pixel.dtype.kind == "f" else int(c) for c in edge_pixel[:3])
+                edge_img = plt.imread(cropped_image)
+                edge_pixel = _sample_edge_color(edge_img)
+                edge_rgb = tuple(
+                    int(round(float(c) * 255)) if edge_img.dtype.kind == "f" else int(c) for c in edge_pixel
+                )
                 pdf.set_fill_color(*edge_rgb)
             else:
                 pdf.set_fill_color(*bleed_color)

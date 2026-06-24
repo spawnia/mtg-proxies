@@ -6,11 +6,13 @@ import pytest
 from matplotlib.pylab import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import numpy as np
+
     from mtg_proxies.decklists import Decklist
 
 
 @pytest.fixture(scope="module")
-def example_scans(example_decklist: Decklist) -> list[tuple[str, str]]:
+def example_scans(example_decklist: Decklist) -> list[tuple[str, str, str]]:
     from mtg_proxies import fetch_scans_scryfall
 
     example_scans = fetch_scans_scryfall(example_decklist)
@@ -19,16 +21,16 @@ def example_scans(example_decklist: Decklist) -> list[tuple[str, str]]:
 
 
 @pytest.fixture(scope="module")
-def example_images(example_scans: list[tuple[str, str]]) -> list[str]:
-    return [path for path, _ in example_scans]
+def example_images(example_scans: list[tuple[str, str, str]]) -> list[str]:
+    return [path for path, _, _ in example_scans]
 
 
-def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str]]) -> None:
-    assert all(isinstance(t, tuple) and len(t) == 2 for t in example_scans)
-    assert all(isinstance(t[0], str) and isinstance(t[1], str) for t in example_scans)
+def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str, str]]) -> None:
+    assert all(isinstance(t, tuple) and len(t) == 3 for t in example_scans)
+    assert all(isinstance(t[0], str) and isinstance(t[1], str) and isinstance(t[2], str) for t in example_scans)
 
 
-def test_print_cards_fpdf(example_scans: list[tuple[str, str]], tmp_path: Path) -> None:
+def test_print_cards_fpdf(example_scans: list[tuple[str, str, str]], tmp_path: Path) -> None:
     from mtg_proxies import print_cards_fpdf
 
     out_file = tmp_path / "decklist.pdf"
@@ -38,7 +40,7 @@ def test_print_cards_fpdf(example_scans: list[tuple[str, str]], tmp_path: Path) 
 
 
 def test_print_cards_matplotlib_pdf(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -49,7 +51,7 @@ def test_print_cards_matplotlib_pdf(
 
 
 def test_print_cards_matplotlib_png(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -60,8 +62,9 @@ def test_print_cards_matplotlib_png(
 
 
 def test_occupied_space_zero_gutter_matches_current() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]), pos=np.array([2, 3]), border_crop=14
@@ -73,8 +76,9 @@ def test_occupied_space_zero_gutter_matches_current() -> None:
 
 
 def test_occupied_space_open_form_adds_pos_gutters() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]),
@@ -86,8 +90,9 @@ def test_occupied_space_open_form_adds_pos_gutters() -> None:
 
 
 def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]),
@@ -100,7 +105,7 @@ def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
 
 
 def test_print_cards_matplotlib_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -111,11 +116,11 @@ def test_print_cards_matplotlib_with_bleed_and_gutter(
 
 
 def test_print_cards_matplotlib_with_borderless_fill_black(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
-    fake_scans: list[tuple[str, str]] = [(path, "borderless") for path, _ in example_scans]
+    fake_scans: list[tuple[str, str, str]] = [(path, "borderless", "2015") for path, _, _ in example_scans]
     out_file = tmp_path / "decklist_borderless.png"
     print_cards_matplotlib(fake_scans, out_file, bleed_mm=3.0, borderless_fill="black")
 
@@ -123,7 +128,7 @@ def test_print_cards_matplotlib_with_borderless_fill_black(
 
 
 def test_print_cards_fpdf_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_fpdf
 
@@ -134,8 +139,9 @@ def test_print_cards_fpdf_with_bleed_and_gutter(
 
 
 def test_crop_mark_positions_zero_gutter_grid() -> None:
-    from mtg_proxies.print_cards import _crop_mark_positions
     import numpy as np
+
+    from mtg_proxies.print_cards import _crop_mark_positions
 
     marks = _crop_mark_positions(
         N=np.array([1, 1]),
@@ -158,8 +164,9 @@ def test_crop_mark_positions_zero_gutter_grid() -> None:
 
 
 def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
-    from mtg_proxies.print_cards import _crop_mark_positions
     import numpy as np
+
+    from mtg_proxies.print_cards import _crop_mark_positions
 
     marks = _crop_mark_positions(
         N=np.array([2, 1]),
@@ -183,3 +190,186 @@ def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
         ]
     )
     assert np.allclose(marks, expected)
+
+
+def test_sample_edge_color_ignores_transparent_corner() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _sample_edge_color
+
+    img = np.ones((10, 8, 4), dtype=float)
+    img[:, 0] = [0.086, 0.075, 0.055, 1.0]
+    img[0, 0] = [1.0, 1.0, 1.0, 0.0]
+
+    assert np.allclose(_sample_edge_color(img), [0.086, 0.075, 0.055])
+
+
+def test_resolve_bleed_color_bordered_card_samples_edge() -> None:
+    from mtg_proxies.print_cards import _resolve_bleed_color
+
+    assert _resolve_bleed_color("black", "edge") == "edge"
+    assert _resolve_bleed_color("white", "edge") == "edge"
+    assert _resolve_bleed_color("gold", "black") == "edge"
+
+
+def test_resolve_bleed_color_borderless_respects_fill() -> None:
+    from mtg_proxies.print_cards import BORDER_COLOR_RGB, _resolve_bleed_color
+
+    assert _resolve_bleed_color("borderless", "edge") == "edge"
+    assert _resolve_bleed_color("borderless", "black") == BORDER_COLOR_RGB["black"]
+    assert _resolve_bleed_color("borderless", "white") == BORDER_COLOR_RGB["white"]
+
+
+def test_should_synthesize_only_old_frames_with_bleed() -> None:
+    from mtg_proxies.print_cards import _should_synthesize
+
+    assert _should_synthesize("1993", 3.0)
+    assert _should_synthesize("1997", 0.1)
+    assert _should_synthesize("2003", 3.0)
+    assert not _should_synthesize("2015", 3.0)
+    assert not _should_synthesize("1993", 0.0)
+    assert not _should_synthesize("future", 3.0)
+
+
+def _bordered_array(height: int, width: int, inset: int) -> np.ndarray:
+    import numpy as np
+
+    img = np.zeros((height, width, 4), dtype=float)
+    img[..., 3] = 1.0
+    img[inset : height - inset, inset : width - inset, :3] = 1.0
+    return img
+
+
+def test_estimate_border_color_ignores_dots_and_transparent_corners() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _estimate_border_color
+
+    img = np.full((20, 16, 4), 0.1, dtype=float)
+    img[..., 3] = 1.0
+    img[0, 0] = [1.0, 1.0, 1.0, 0.0]          # transparent corner
+    img[19, 15] = [1.0, 1.0, 1.0, 0.0]        # transparent corner
+    img[1, 8, :3] = 1.0                        # stray bright dot in top band
+
+    assert np.allclose(_estimate_border_color(img), [0.1, 0.1, 0.1])
+
+
+def test_detect_content_box_uniform_border() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (3, 3, 3, 3)
+
+
+def test_detect_content_box_ignores_isolated_dot() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    img[1, 8, :3] = 1.0  # one bright pixel inside the top border
+
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (3, 3, 3, 3)
+
+
+def test_detect_content_box_keeps_protrusion() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    img[8:12, 1:3, :3] = 1.0  # protrusion reaching left to column 1 over 4 rows
+
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (1, 3, 3, 3)
+
+
+def test_content_box_plausible_rejects_full_art() -> None:
+    from mtg_proxies.print_cards import _content_box_plausible
+
+    assert _content_box_plausible((30, 40, 30, 40), (1040, 745))
+    assert not _content_box_plausible((2, 3, 1, 2), (1040, 745))
+
+
+def test_resolve_synthetic_color_canonical_black_and_white() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _resolve_synthetic_color
+
+    img = np.full((20, 16, 4), 0.1, dtype=float)
+    img[..., 3] = 1.0
+
+    assert _resolve_synthetic_color(img, "black", strategy="canonical") == (0, 0, 0)
+    assert _resolve_synthetic_color(img, "white", strategy="canonical") == (255, 255, 255)
+
+
+def test_resolve_synthetic_color_canonical_gold_samples_ring() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _resolve_synthetic_color
+
+    img = np.zeros((20, 16, 4), dtype=float)
+    img[..., 3] = 1.0
+    img[..., :3] = [0.8, 0.6, 0.2]  # gold ring
+
+    assert _resolve_synthetic_color(img, "gold", strategy="canonical") == (204, 153, 51)
+
+
+def test_resolve_synthetic_color_sampled_ignores_border_name() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _resolve_synthetic_color
+
+    img = np.full((20, 16, 4), 0.1, dtype=float)
+    img[..., 3] = 1.0
+
+    assert _resolve_synthetic_color(img, "black", strategy="sampled") == (26, 26, 26)
+
+
+def test_matplotlib_synthesizes_for_old_frame(
+    example_scans: list[tuple[str, str, str]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mtg_proxies.print_cards as pc
+    from mtg_proxies import print_cards_matplotlib
+
+    calls: list[tuple[int, int, int, int]] = []
+    real_detect = pc._detect_content_box
+
+    def spy(img, reference, **kwargs) -> tuple[int, int, int, int]:  # noqa: ANN001, ANN003
+        box = real_detect(img, reference, **kwargs)
+        calls.append(box)
+        return box
+
+    monkeypatch.setattr(pc, "_detect_content_box", spy)
+
+    old_frame_scans = [(path, "black", "1993") for path, _, _ in example_scans]
+    out_file = tmp_path / "synth.png"
+    print_cards_matplotlib(old_frame_scans, out_file, bleed_mm=3.0)
+
+    assert (tmp_path / "synth_000.png").is_file()
+    assert len(calls) == len(old_frame_scans)
+
+
+def test_fpdf_synthesizes_for_old_frame(
+    example_scans: list[tuple[str, str, str]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mtg_proxies.print_cards as pc
+    from mtg_proxies import print_cards_fpdf
+
+    calls: list[tuple[int, int, int, int]] = []
+    real_detect = pc._detect_content_box
+
+    def spy(img, reference, **kwargs) -> tuple[int, int, int, int]:  # noqa: ANN001, ANN003
+        box = real_detect(img, reference, **kwargs)
+        calls.append(box)
+        return box
+
+    monkeypatch.setattr(pc, "_detect_content_box", spy)
+
+    old_frame_scans = [(path, "black", "1993") for path, _, _ in example_scans]
+    out_file = tmp_path / "synth.pdf"
+    print_cards_fpdf(old_frame_scans, out_file, bleed_mm=3.0)
+
+    assert out_file.is_file()
+    assert len(calls) == len(old_frame_scans)

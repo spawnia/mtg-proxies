@@ -39,6 +39,10 @@ class Card:
     def border_color(self) -> str:
         return self.card.get("border_color", "black")
 
+    @property
+    def frame(self) -> str:
+        return self.card.get("frame", "2015")
+
     def __format__(self, format_spec: str) -> str:
         if format_spec == "text":
             return f"{self.count} {self['name']}"
