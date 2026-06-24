@@ -20,6 +20,8 @@ BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
 
 OLD_FRAMES = frozenset({"1993", "1997", "2003"})
 
+SYNTHETIC_COLOR_STRATEGY = "canonical"  # or "sampled"; winner pinned by manual print A/B
+
 
 def _should_synthesize(frame: str, bleed: float) -> bool:
     """Decide whether to synthesize a clean border for a card.
@@ -101,6 +103,23 @@ def _estimate_border_color(img: np.ndarray, band: int = 4, central_fraction: flo
     samples = [arr[rs, cs][opaque[rs, cs]] for rs, cs in regions]
     stacked = np.concatenate(samples)
     return np.median(stacked[:, :3], axis=0)
+
+
+def _resolve_synthetic_color(
+    img: np.ndarray,
+    border_color: str,
+    strategy: str = SYNTHETIC_COLOR_STRATEGY,
+) -> tuple[int, int, int]:
+    """Resolve the synthetic border color as a 0-255 RGB tuple.
+
+    ``canonical`` maps black/white to pure values and samples everything else;
+    ``sampled`` always uses the ring-median estimate.
+    """
+    if strategy == "canonical" and border_color in BORDER_COLOR_RGB:
+        return BORDER_COLOR_RGB[border_color]
+    sampled = _estimate_border_color(img)
+    r, g, b = (int(round(c * 255)) for c in sampled)
+    return (r, g, b)
 
 
 def _detect_content_box(
