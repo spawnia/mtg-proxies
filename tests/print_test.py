@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="module")
-def example_scans(example_decklist: Decklist) -> list[tuple[str, str]]:
+def example_scans(example_decklist: Decklist) -> list[tuple[str, str, str]]:
     from mtg_proxies import fetch_scans_scryfall
 
     example_scans = fetch_scans_scryfall(example_decklist)
@@ -19,16 +19,16 @@ def example_scans(example_decklist: Decklist) -> list[tuple[str, str]]:
 
 
 @pytest.fixture(scope="module")
-def example_images(example_scans: list[tuple[str, str]]) -> list[str]:
-    return [path for path, _ in example_scans]
+def example_images(example_scans: list[tuple[str, str, str]]) -> list[str]:
+    return [path for path, _, _ in example_scans]
 
 
-def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str]]) -> None:
-    assert all(isinstance(t, tuple) and len(t) == 2 for t in example_scans)
-    assert all(isinstance(t[0], str) and isinstance(t[1], str) for t in example_scans)
+def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str, str]]) -> None:
+    assert all(isinstance(t, tuple) and len(t) == 3 for t in example_scans)
+    assert all(isinstance(t[0], str) and isinstance(t[1], str) and isinstance(t[2], str) for t in example_scans)
 
 
-def test_print_cards_fpdf(example_scans: list[tuple[str, str]], tmp_path: Path) -> None:
+def test_print_cards_fpdf(example_scans: list[tuple[str, str, str]], tmp_path: Path) -> None:
     from mtg_proxies import print_cards_fpdf
 
     out_file = tmp_path / "decklist.pdf"
@@ -38,7 +38,7 @@ def test_print_cards_fpdf(example_scans: list[tuple[str, str]], tmp_path: Path) 
 
 
 def test_print_cards_matplotlib_pdf(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -49,7 +49,7 @@ def test_print_cards_matplotlib_pdf(
 
 
 def test_print_cards_matplotlib_png(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -100,7 +100,7 @@ def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
 
 
 def test_print_cards_matplotlib_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -111,11 +111,11 @@ def test_print_cards_matplotlib_with_bleed_and_gutter(
 
 
 def test_print_cards_matplotlib_with_borderless_fill_black(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
-    fake_scans: list[tuple[str, str]] = [(path, "borderless") for path, _ in example_scans]
+    fake_scans: list[tuple[str, str, str]] = [(path, "borderless", "2015") for path, _, _ in example_scans]
     out_file = tmp_path / "decklist_borderless.png"
     print_cards_matplotlib(fake_scans, out_file, bleed_mm=3.0, borderless_fill="black")
 
@@ -123,7 +123,7 @@ def test_print_cards_matplotlib_with_borderless_fill_black(
 
 
 def test_print_cards_fpdf_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str]], tmp_path: Path
+    example_scans: list[tuple[str, str, str]], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_fpdf
 
@@ -210,3 +210,14 @@ def test_resolve_bleed_color_borderless_respects_fill() -> None:
     assert _resolve_bleed_color("borderless", "edge") == "edge"
     assert _resolve_bleed_color("borderless", "black") == BORDER_COLOR_RGB["black"]
     assert _resolve_bleed_color("borderless", "white") == BORDER_COLOR_RGB["white"]
+
+
+def test_should_synthesize_only_old_frames_with_bleed() -> None:
+    from mtg_proxies.print_cards import _should_synthesize
+
+    assert _should_synthesize("1993", 3.0)
+    assert _should_synthesize("1997", 0.1)
+    assert _should_synthesize("2003", 3.0)
+    assert not _should_synthesize("2015", 3.0)
+    assert not _should_synthesize("1993", 0.0)
+    assert not _should_synthesize("future", 3.0)

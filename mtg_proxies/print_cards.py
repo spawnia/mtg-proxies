@@ -18,6 +18,17 @@ BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
     "white": (255, 255, 255),
 }
 
+OLD_FRAMES = frozenset({"1993", "1997", "2003"})
+
+
+def _should_synthesize(frame: str, bleed: float) -> bool:
+    """Decide whether to synthesize a clean border for a card.
+
+    Synthesis only helps old-frame scans (noisy border, clean rectangular
+    inner content box) and only matters when bleed is being painted.
+    """
+    return bleed > 0 and frame in OLD_FRAMES
+
 
 def _resolve_bleed_color(
     border_color: str,
@@ -94,7 +105,7 @@ def _crop_mark_positions(
 
 
 def print_cards_matplotlib(
-    images: Sequence[tuple[str, str]],
+    images: Sequence[tuple[str, str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([8.27, 11.69]),
     cardsize: np.ndarray = np.array([2.5, 3.5]),
@@ -109,7 +120,7 @@ def print_cards_matplotlib(
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of ``(image_path, border_color)`` tuples.
+        images: List of ``(image_path, border_color, frame)`` tuples.
         filepath: Name of the pdf file
         papersize: Size of the paper in inches. Defaults to A4.
         cardsize: Size of a card in inches.
@@ -149,7 +160,7 @@ def print_cards_matplotlib(
             for y in range(N[1]):
                 for x in range(N[0]):
                     if idx < len(images):
-                        image_path, border_color = images[idx]
+                        image_path, border_color, frame = images[idx]
                         img = plt.imread(image_path)
                         idx += 1
 
@@ -210,7 +221,7 @@ def print_cards_matplotlib(
 
 
 def print_cards_fpdf(
-    images: Sequence[tuple[str, str]],
+    images: Sequence[tuple[str, str, str]],
     filepath: str | Path,
     papersize: np.ndarray = np.array([210, 297]),
     cardsize: np.ndarray = np.array([2.5 * 25.4, 3.5 * 25.4]),
@@ -224,7 +235,7 @@ def print_cards_fpdf(
     """Print a list of cards to a pdf file.
 
     Args:
-        images: List of ``(image_path, border_color)`` tuples.
+        images: List of ``(image_path, border_color, frame)`` tuples.
         filepath: Name of the pdf file
         papersize: Size of the paper in mm. Defaults to A4.
         cardsize: Size of a card in mm.
@@ -255,7 +266,7 @@ def print_cards_fpdf(
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
 
-    for i, (image, border_color) in enumerate(tqdm(images, desc="Plotting cards")):
+    for i, (image, border_color, frame) in enumerate(tqdm(images, desc="Plotting cards")):
         if i % cards_per_sheet == 0:
             pdf.add_page()
             if background_color is not None:
