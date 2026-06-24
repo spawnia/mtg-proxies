@@ -6,6 +6,8 @@ import pytest
 from matplotlib.pylab import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import numpy as np
+
     from mtg_proxies.decklists import Decklist
 
 
@@ -60,8 +62,9 @@ def test_print_cards_matplotlib_png(
 
 
 def test_occupied_space_zero_gutter_matches_current() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]), pos=np.array([2, 3]), border_crop=14
@@ -73,8 +76,9 @@ def test_occupied_space_zero_gutter_matches_current() -> None:
 
 
 def test_occupied_space_open_form_adds_pos_gutters() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]),
@@ -86,8 +90,9 @@ def test_occupied_space_open_form_adds_pos_gutters() -> None:
 
 
 def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
-    from mtg_proxies.print_cards import _occupied_space
     import numpy as np
+
+    from mtg_proxies.print_cards import _occupied_space
 
     result = _occupied_space(
         cardsize=np.array([2.5, 3.5]),
@@ -134,8 +139,9 @@ def test_print_cards_fpdf_with_bleed_and_gutter(
 
 
 def test_crop_mark_positions_zero_gutter_grid() -> None:
-    from mtg_proxies.print_cards import _crop_mark_positions
     import numpy as np
+
+    from mtg_proxies.print_cards import _crop_mark_positions
 
     marks = _crop_mark_positions(
         N=np.array([1, 1]),
@@ -158,8 +164,9 @@ def test_crop_mark_positions_zero_gutter_grid() -> None:
 
 
 def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
-    from mtg_proxies.print_cards import _crop_mark_positions
     import numpy as np
+
+    from mtg_proxies.print_cards import _crop_mark_positions
 
     marks = _crop_mark_positions(
         N=np.array([2, 1]),
@@ -187,6 +194,7 @@ def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
 
 def test_sample_edge_color_ignores_transparent_corner() -> None:
     import numpy as np
+
     from mtg_proxies.print_cards import _sample_edge_color
 
     img = np.ones((10, 8, 4), dtype=float)
@@ -205,7 +213,7 @@ def test_resolve_bleed_color_bordered_card_samples_edge() -> None:
 
 
 def test_resolve_bleed_color_borderless_respects_fill() -> None:
-    from mtg_proxies.print_cards import _resolve_bleed_color, BORDER_COLOR_RGB
+    from mtg_proxies.print_cards import BORDER_COLOR_RGB, _resolve_bleed_color
 
     assert _resolve_bleed_color("borderless", "edge") == "edge"
     assert _resolve_bleed_color("borderless", "black") == BORDER_COLOR_RGB["black"]
@@ -221,3 +229,64 @@ def test_should_synthesize_only_old_frames_with_bleed() -> None:
     assert not _should_synthesize("2015", 3.0)
     assert not _should_synthesize("1993", 0.0)
     assert not _should_synthesize("future", 3.0)
+
+
+def _bordered_array(height: int, width: int, inset: int) -> np.ndarray:
+    import numpy as np
+
+    img = np.zeros((height, width, 4), dtype=float)
+    img[..., 3] = 1.0
+    img[inset : height - inset, inset : width - inset, :3] = 1.0
+    return img
+
+
+def test_estimate_border_color_ignores_dots_and_transparent_corners() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _estimate_border_color
+
+    img = np.full((20, 16, 4), 0.1, dtype=float)
+    img[..., 3] = 1.0
+    img[0, 0] = [1.0, 1.0, 1.0, 0.0]          # transparent corner
+    img[19, 15] = [1.0, 1.0, 1.0, 0.0]        # transparent corner
+    img[1, 8, :3] = 1.0                        # stray bright dot in top band
+
+    assert np.allclose(_estimate_border_color(img), [0.1, 0.1, 0.1])
+
+
+def test_detect_content_box_uniform_border() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (3, 3, 3, 3)
+
+
+def test_detect_content_box_ignores_isolated_dot() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    img[1, 8, :3] = 1.0  # one bright pixel inside the top border
+
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (3, 3, 3, 3)
+
+
+def test_detect_content_box_keeps_protrusion() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _detect_content_box
+
+    img = _bordered_array(20, 16, 3)
+    img[8:12, 1:3, :3] = 1.0  # protrusion reaching left to column 1 over 4 rows
+
+    assert _detect_content_box(img, reference=np.array([0.0, 0.0, 0.0])) == (1, 3, 3, 3)
+
+
+def test_content_box_plausible_rejects_full_art() -> None:
+    from mtg_proxies.print_cards import _content_box_plausible
+
+    assert _content_box_plausible((30, 40, 30, 40), (1040, 745))
+    assert not _content_box_plausible((2, 3, 1, 2), (1040, 745))

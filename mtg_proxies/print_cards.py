@@ -49,6 +49,103 @@ def _resolve_bleed_color(
     return "edge"
 
 
+def _normalize(img: np.ndarray) -> np.ndarray:
+    """Return image data as float in ``[0, 1]`` regardless of source dtype."""
+    arr = img.astype(float)
+    if img.dtype.kind in "ui":
+        arr = arr / 255.0
+    return arr
+
+
+def _opaque_mask(arr: np.ndarray) -> np.ndarray:
+    """Boolean mask of non-transparent pixels (all-True when no alpha channel)."""
+    if arr.shape[2] == 4:
+        return arr[..., 3] > 0.5
+    return np.ones(arr.shape[:2], dtype=bool)
+
+
+def _central_band(length: int, fraction: float) -> tuple[int, int]:
+    """Index range covering the central ``fraction`` of ``length``."""
+    margin = int(length * (1 - fraction) / 2)
+    return margin, length - margin
+
+
+def _has_run(mask: np.ndarray, min_run: int) -> bool:
+    """Whether ``mask`` contains a contiguous True run of at least ``min_run``."""
+    run = 0
+    for value in mask:
+        run = run + 1 if value else 0
+        if run >= min_run:
+            return True
+    return False
+
+
+def _estimate_border_color(img: np.ndarray, band: int = 4, central_fraction: float = 0.6) -> np.ndarray:
+    """Estimate the border color as the per-channel median of the outer ring.
+
+    Samples only opaque pixels in thin edge bands over the central fraction of
+    each side, dodging the transparent rounded corners and rejecting stray scan
+    dots by majority. Returns normalized ``[0, 1]`` RGB.
+    """
+    arr = _normalize(img)
+    height, width = arr.shape[:2]
+    opaque = _opaque_mask(arr)
+    cy0, cy1 = _central_band(height, central_fraction)
+    cx0, cx1 = _central_band(width, central_fraction)
+    regions = [
+        (slice(0, band), slice(cx0, cx1)),
+        (slice(height - band, height), slice(cx0, cx1)),
+        (slice(cy0, cy1), slice(0, band)),
+        (slice(cy0, cy1), slice(width - band, width)),
+    ]
+    samples = [arr[rs, cs][opaque[rs, cs]] for rs, cs in regions]
+    stacked = np.concatenate(samples)
+    return np.median(stacked[:, :3], axis=0)
+
+
+def _detect_content_box(
+    img: np.ndarray,
+    reference: np.ndarray,
+    tolerance: float = 0.18,
+    min_run: int = 3,
+    central_fraction: float = 0.6,
+) -> tuple[int, int, int, int]:
+    """Detect the tightest content box as ``(left, top, right, bottom)`` insets.
+
+    Per side, scan inward and take the closest line where *substantial* content
+    appears - a contiguous run of at least ``min_run`` opaque pixels deviating
+    from ``reference`` by more than ``tolerance`` (in ``[0, 1]``). Sampling the
+    central fraction of the opposite dimension dodges the rounded corners; the
+    run requirement rejects isolated scan dots. Taking the closest line keeps
+    protrusions (e.g. loyalty badges) inside the box, never clipped.
+    """
+    arr = _normalize(img)
+    height, width = arr.shape[:2]
+    opaque = _opaque_mask(arr)
+    ref = np.asarray(reference, dtype=float)
+    deviates = (np.abs(arr[..., :3] - ref).max(axis=2) > tolerance) & opaque
+    cx0, cx1 = _central_band(width, central_fraction)
+    cy0, cy1 = _central_band(height, central_fraction)
+
+    left = next((c for c in range(width) if _has_run(deviates[cy0:cy1, c], min_run)), width)
+    right_col = next((c for c in range(width - 1, -1, -1) if _has_run(deviates[cy0:cy1, c], min_run)), -1)
+    top = next((r for r in range(height) if _has_run(deviates[r, cx0:cx1], min_run)), height)
+    bottom_row = next((r for r in range(height - 1, -1, -1) if _has_run(deviates[r, cx0:cx1], min_run)), -1)
+    return left, top, width - 1 - right_col, height - 1 - bottom_row
+
+
+def _content_box_plausible(
+    box: tuple[int, int, int, int],
+    img_shape: tuple[int, ...],
+    floor_fraction: float = 0.02,
+) -> bool:
+    """Reject full-art/borderless detections where 3+ sides hug the edge."""
+    height, width = img_shape[:2]
+    floor = floor_fraction * min(height, width)
+    small_sides = sum(inset < floor for inset in box)
+    return small_sides < 3
+
+
 def _sample_edge_color(img: np.ndarray) -> np.ndarray:
     """Sample a card's border color from the midpoint of its left edge.
 
