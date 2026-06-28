@@ -292,31 +292,19 @@ def test_content_box_plausible_rejects_full_art() -> None:
     assert not _content_box_plausible((2, 3, 1, 2), (1040, 745))
 
 
-def test_resolve_synthetic_color_canonical_black_and_white() -> None:
-    import numpy as np
-
-    from mtg_proxies.print_cards import _resolve_synthetic_color
-
-    img = np.full((20, 16, 4), 0.1, dtype=float)
-    img[..., 3] = 1.0
-
-    assert _resolve_synthetic_color(img, "black", strategy="canonical") == (0, 0, 0)
-    assert _resolve_synthetic_color(img, "white", strategy="canonical") == (255, 255, 255)
-
-
-def test_resolve_synthetic_color_canonical_gold_samples_ring() -> None:
+def test_resolve_synthetic_color_returns_ring_median() -> None:
     import numpy as np
 
     from mtg_proxies.print_cards import _resolve_synthetic_color
 
     img = np.zeros((20, 16, 4), dtype=float)
     img[..., 3] = 1.0
-    img[..., :3] = [0.8, 0.6, 0.2]  # gold ring
+    img[..., :3] = [0.8, 0.6, 0.2]
 
-    assert _resolve_synthetic_color(img, "gold", strategy="canonical") == (204, 153, 51)
+    assert _resolve_synthetic_color(img) == (204, 153, 51)
 
 
-def test_resolve_synthetic_color_sampled_ignores_border_name() -> None:
+def test_resolve_synthetic_color_keeps_muddy_black() -> None:
     import numpy as np
 
     from mtg_proxies.print_cards import _resolve_synthetic_color
@@ -324,7 +312,9 @@ def test_resolve_synthetic_color_sampled_ignores_border_name() -> None:
     img = np.full((20, 16, 4), 0.1, dtype=float)
     img[..., 3] = 1.0
 
-    assert _resolve_synthetic_color(img, "black", strategy="sampled") == (26, 26, 26)
+    # A muddy scanned black stays muddy rather than being forced to pure (0, 0, 0),
+    # so it blends with the scanned border preserved at the rounded corners.
+    assert _resolve_synthetic_color(img) == (26, 26, 26)
 
 
 def test_matplotlib_synthesizes_for_old_frame(
