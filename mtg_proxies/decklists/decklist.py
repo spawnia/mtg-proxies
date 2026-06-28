@@ -40,8 +40,8 @@ class Card:
         return self.card.get("border_color", "black")
 
     @property
-    def frame(self) -> str:
-        return self.card.get("frame", "2015")
+    def full_art(self) -> bool:
+        return self.card.get("full_art", False)
 
     def __format__(self, format_spec: str) -> str:
         if format_spec == "text":
