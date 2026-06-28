@@ -20,8 +20,6 @@ BORDER_COLOR_RGB: dict[str, tuple[int, int, int]] = {
 
 OLD_FRAMES = frozenset({"1993", "1997", "2003"})
 
-SYNTHETIC_COLOR_STRATEGY = "canonical"  # or "sampled"; winner pinned by manual print A/B
-
 
 def _should_synthesize(frame: str, bleed: float) -> bool:
     """Decide whether to synthesize a clean border for a card.
@@ -105,20 +103,15 @@ def _estimate_border_color(img: np.ndarray, band: int = 4, central_fraction: flo
     return np.median(stacked[:, :3], axis=0)
 
 
-def _resolve_synthetic_color(
-    img: np.ndarray,
-    border_color: str,
-    strategy: str = SYNTHETIC_COLOR_STRATEGY,
-) -> tuple[int, int, int]:
+def _resolve_synthetic_color(img: np.ndarray) -> tuple[int, int, int]:
     """Resolve the synthetic border color as a 0-255 RGB tuple.
 
-    ``canonical`` maps black/white to pure values and samples everything else;
-    ``sampled`` always uses the ring-median estimate.
+    Always the per-channel median of the scanned border ring, so the synthetic
+    fill matches the scanned border that the rectangular crop preserves at the
+    rounded corners. Keeping the muddy scanned tone (rather than forcing pure
+    black/white) also reads as more natural on aged retro-frame cards.
     """
-    if strategy == "canonical" and border_color in BORDER_COLOR_RGB:
-        return BORDER_COLOR_RGB[border_color]
-    sampled = _estimate_border_color(img)
-    r, g, b = (int(round(c * 255)) for c in sampled)
+    r, g, b = (int(round(c * 255)) for c in _estimate_border_color(img))
     return (r, g, b)
 
 
@@ -298,7 +291,7 @@ def print_cards_matplotlib(
                             card_lower = (base + bleed) / papersize
                             card_upper_nb = (base + bleed + cardsize) / papersize
 
-                            synth_rgb = tuple(c / 255.0 for c in _resolve_synthetic_color(img, border_color))
+                            synth_rgb = tuple(c / 255.0 for c in _resolve_synthetic_color(img))
                             plt.gca().add_patch(
                                 Rectangle(
                                     (footprint_lower[0], 1 - footprint_upper[1]),
@@ -447,7 +440,7 @@ def print_cards_fpdf(
                 crop_left, crop_top, crop_right, crop_bottom = content_box
                 lower = offset + _occupied_space(occupied_cardsize, np.array([x, y]), border_crop, gutter=gutter)
 
-                pdf.set_fill_color(*_resolve_synthetic_color(img, border_color))
+                pdf.set_fill_color(*_resolve_synthetic_color(img))
                 pdf.rect(lower[0], lower[1], cardsize[0] + 2 * bleed, cardsize[1] + 2 * bleed, "F")
 
                 source = Path(image)
