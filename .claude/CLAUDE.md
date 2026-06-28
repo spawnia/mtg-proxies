@@ -16,9 +16,10 @@ The `mtg` consumer project installs from it via `uvx --from git+https://github.c
 ## Border-synthesis test cases
 
 `--bleed` synthesizes a clean border for retro-frame scans (Scryfall `frame` in `1993` / `1997` / `2003`); everything else uses the edge-sample / `--borderless-fill` fallback.
+The synthetic color is always the per-channel median of the scanned border ring (`_resolve_synthetic_color`), kept muddy rather than forced to pure black/white so it blends with the scanned border the rectangular crop preserves at the rounded corners.
 The visual behavior is verified by printing, not unit tests:
 
 - `tests/data/border_synthesis_edge_cases.txt` — 16-card kitchen-sink deck, one card per branch (retro black/white/gold/silver borders, a full-art card that the plausibility gate skips, a planeswalker whose loyalty badge must not be clipped, plus modern black/white/silver/borderless and a retro-*look* reprint on the fallback path). Keep comment lines digit-free — the parser scans every line for a "number word" and would misread `1993 frame` as a card.
-- `docs/border-synthesis-testing.md` — per-card expectation table, render/refresh commands, the `SYNTHETIC_COLOR_STRATEGY` (canonical vs sampled) A/B procedure, and a print-inspection checklist.
+- `docs/border-synthesis-testing.md` — per-card expectation table, render/refresh commands, and a print-inspection checklist.
 
 Render a sheet: `uv run mtg-proxies print --border_crop=0 --bleed=2 tests/data/border_synthesis_edge_cases.txt out.pdf`.
