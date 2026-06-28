@@ -1,0 +1,56 @@
+# --bleed integration test deck -- manual print-testing fixture.
+#
+# This is THE regression fixture for the --bleed feature. Render it to a single
+# sheet (command in docs/bleed-testing.md) and inspect every card's edges and
+# corners. Each card is a deliberate representative of one edge case --bleed must
+# handle; the per-card rationale, set, frame and measured border color live in
+# the table in docs/bleed-testing.md. When a card misbehaves in the wild, add it
+# (or a representative) here and to that table first, then fix.
+#
+# PARSER CONSTRAINT: the decklist parser scans every line for a "number word",
+# so comment lines must stay digit-free or they get misread as cards. Keep all
+# numbers (sets, frames, collector numbers) in the docs table, never in comments.
+#
+# === Retro scans: aged, noisy border must be cleaned and bled in its own tone ===
+#
+# black, then white -- clean muddy fill out to the cut, no scan ring or dots
+1 Hypnotic Specter (LEB) 113
+1 Worn Powerstone (USG) 318
+1 Damnation (PLC) 85
+1 Serra Angel (2ED) 40
+1 Llanowar Elves (6ED) 239
+1 Shock (9ED) 220
+#
+# gold (Worlds) and near-black silver (Unhinged) -- bled in their sampled tone
+1 Black Knight (WC97) js143
+1 Ass Whuppin' (UNH) 117
+#
+# planeswalker -- protruding loyalty badge and the rounded corners must survive
+1 Sorin Markov (M12) 109
+#
+# retro full-art -- no border to clean, art must reach the cut untouched
+1 Forest (ZEN) 246
+#
+# === Modern frames are NOT all clean digital images ===
+#
+# truly clean digital borders -- must stay perfectly seamless (pure black, pure white)
+1 Black Lotus (VMA) 4
+1 Abrupt Decay (MB2) 78
+#
+# muddy modern black scan, clean edge -- bled tone must match it, no seam
+1 Lightning Bolt (2X2) 117
+#
+# muddy modern black scan with a localized edge artifact -- must be painted over
+1 Blatant Thievery (E02) 8
+#
+# modern full-art -- edge is art, must not gain a border ring
+1 Island (ZNR) 271
+#
+# === Silver, Secret Lair and borderless -- non-uniform or no border ===
+#
+# Unstable silver, then a non-uniform Secret Lair edge
+1 Adorable Kitten (UST) 1
+1 Rainbow Dash (SLD) 1540
+#
+# borderless -- edge replication or --borderless-fill
+1 Ajani, Sleeper Agent (DMU) 375

@@ -13,13 +13,13 @@ The `mtg` consumer project installs from it via `uvx --from git+https://github.c
 - Run tests with `uv run python -m pytest tests/` (CI runs plain `python -m pytest tests/` and does **not** run ruff).
 - Plan/spec files are kept out of the repo, under `~/.local/share/superpowers/mtg-proxies/`.
 
-## Border-synthesis test cases
+## --bleed integration test
 
-`--bleed` synthesizes a clean border for retro-frame scans (Scryfall `frame` in `1993` / `1997` / `2003`); everything else uses the edge-sample / `--borderless-fill` fallback.
-The synthetic color is always the per-channel median of the scanned border ring (`_resolve_synthetic_color`), kept muddy rather than forced to pure black/white so it blends with the scanned border the rectangular crop preserves at the rounded corners.
-The visual behavior is verified by printing, not unit tests:
+`tests/data/bleed_edge_cases.txt` is THE regression fixture for `--bleed`: one deliberate representative of every edge case the feature must handle, on a single sheet.
+Edge/corner quality is visual, so it is verified by **printing and inspecting**, not unit tests.
+When a card misbehaves in the wild, add it (or a representative) to the fixture and the docs table first, then fix.
 
-- `tests/data/border_synthesis_edge_cases.txt` — 16-card kitchen-sink deck, one card per branch (retro black/white/gold/silver borders, a full-art card that the plausibility gate skips, a planeswalker whose loyalty badge must not be clipped, plus modern black/white/silver/borderless and a retro-*look* reprint on the fallback path). Keep comment lines digit-free — the parser scans every line for a "number word" and would misread `1993 frame` as a card.
-- `docs/border-synthesis-testing.md` — per-card expectation table, render/refresh commands, and a print-inspection checklist.
+- `tests/data/bleed_edge_cases.txt` — the deck. Covers retro black/white/gold/silver scans, a planeswalker (protruding loyalty badge + corners), retro full-art, genuinely clean digital pure black/white, muddy modern scans (modern frame does NOT imply clean digital), a modern scan with a localized edge artifact (Blatant Thievery), modern full-art, silver, and borderless. Keep comment lines **digit-free** — the parser scans every line for a "number word" and would misread a digit-bearing comment as a card.
+- `docs/bleed-testing.md` — per-card table (set, frame, border, measured border tone, rationale), render commands, and the print-inspection checklist.
 
-Render a sheet: `uv run mtg-proxies print --border_crop=0 --bleed=2 tests/data/border_synthesis_edge_cases.txt out.pdf`.
+Render a sheet (`.pdf` → fpdf renderer, other extension → matplotlib): `uv run mtg-proxies print --border_crop=0 --bleed=2 tests/data/bleed_edge_cases.txt out.pdf`.
