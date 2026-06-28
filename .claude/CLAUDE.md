@@ -23,3 +23,10 @@ When a card misbehaves in the wild, add it (or a representative) to the fixture 
 - `docs/bleed-testing.md` — per-card table (set, frame, border, measured border tone, rationale), render commands, and the print-inspection checklist.
 
 Render a sheet (`.pdf` → fpdf renderer, other extension → matplotlib): `uv run mtg-proxies print --border_crop=0 --bleed=2 tests/data/bleed_edge_cases.txt out.pdf`.
+
+Remaining issues to solve in rough order:
+- Forest/Island show scan artifacts at the edge. Full Art != Borderless.  
+- Bottom of new-frame silver border cards looks bad - should be black, curvature of the bottom black border should extend.
+- True borderless cards don't look too well, the edge sampled average/median does not work well with parts of the card. Also, some new frame borderless cards also have the black bottom.
+- Metallic look of old silver and gold border cards is not preserved.
+- We probably have issues with many other kinds of weird borders and special prints - I would rather try and fix them all exhaustively now, rather than have to go back when I eventually encounter them.
