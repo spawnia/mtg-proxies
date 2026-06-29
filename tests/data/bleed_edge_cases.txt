@@ -52,5 +52,34 @@
 1 Adorable Kitten (UST) 1
 1 Rainbow Dash (SLD) 1540
 #
-# borderless -- edge replication or --borderless-fill
+# borderless -- art must reach the cut, no border ring
 1 Ajani, Sleeper Agent (DMU) 375
+#
+# more borderless -- solid or straight-lined edges replicate cleanly; painterly
+# or slanted edges streak mildly in the trimmed margin, which is acceptable
+1 Aatchik, Emerald Radian (DFT) 360
+1 Adeline, Resplendent Cathar (FCA) 1
+1 Aesi, Tyrant of Gyre Strait (SLD) 1873
+1 Aether Vial (SLD) 1640
+1 Agonasaur Rex (DFT) 542
+1 Ajani Goldmane (SLD) 1453
+#
+# === Edges that break the simple-bordered assumption ===
+#
+# square corners, opaque to the very edge -- no rounded alpha rim to flatten
+1 Black Lotus (CEI) 233
+#
+# extended-art -- art bleeds to the sides while a black border stays top and bottom
+1 Jaxis, the Troublemaker (SNC) 461
+#
+# borderless with a dark bottom strip -- bottom extends dark, top and sides extend art
+1 Drivnod, Carnage Dominus (ONE) 305
+#
+# Mystical Archive showcase -- cream and gold filigree edge, non-uniform along its length
+1 Putrefy (STA) 63
+#
+# reverse face of a transforming card (Nightfall Predator) -- non-black brown border tone
+1 Daybreak Ranger (ISD) 176
+#
+# Art Series -- full-bleed painting, no frame at all
+1 Agatha's Champion (AWOE) 22
