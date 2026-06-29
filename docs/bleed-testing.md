@@ -9,40 +9,43 @@ When a card misbehaves in the wild, add it (or a representative) to the fixture 
 ## What `--bleed` must do
 
 `--bleed` extends every card outward by the requested margin so a print-and-cut workflow has ink past the cut line.
-At the very edge it must:
+It uses one metadata-free pipeline for every card — no Scryfall `full_art` or `border_color` is read:
 
-- paint the bleed in the card's own border tone, sampled per card, so muddy scans stay muddy and genuinely clean digital borders stay pure;
-- paint over scan artifacts on the outermost ring of the card; and
-- preserve the rounded corners and any content that protrudes toward the edge (loyalty badges, collector and artist lines).
+- inset a thin uniform ring off every edge, dropping the semi-transparent scan rim and any artifact clinging to the outermost pixels, while staying inside the rounded-corner zone so the corners survive;
+- flatten the rounded-corner transparency per row, so each corner inherits its own side's tone (a black bottom stays black, a light top stays light);
+- replicate the resulting edge and corner pixels outward into the margin (`np.pad(mode="edge")`), so each edge continues its own colour instead of a single sampled fill.
 
 It must do this whether the scan is an aged retro image or a modern frame.
 Modern frames are **not** guaranteed to be clean digital images — most are muddy scans, and some carry edge artifacts (see Blatant Thievery below).
 
+Because the margin replicates the card's own outermost pixels, an edge that varies along its length (busy borderless showcases) produces mild streaks in the margin.
+This is inherent to replication and acceptable: the streaks continue the card's own colours and sit entirely in the trimmed margin.
+
 ## The fixture
 
-Border tone is the per-channel median of the scanned border ring, measured from the actual scan.
-It is the single most telling number: pure `(0,0,0)` / `(255,255,255)` means a clean digital image, anything muddier is a scan.
+The **border tone** column is the per-channel median of the scanned border ring, measured from the actual scan.
+It no longer drives the fill — replication does — but it stays the single most telling diagnostic: pure `(0,0,0)` / `(255,255,255)` means a clean digital image, anything muddier is a scan.
 
 | Card | Set | # | Frame | Border | Border tone | Why it is in the fixture |
 | --- | --- | --- | --- | --- | --- | --- |
-| Hypnotic Specter | LEB | 113 | 1993 | black | (27,27,27) | earliest retro black scan; bleed must be muddy near-black, not stark `#000`, with no scan ring |
+| Hypnotic Specter | LEB | 113 | 1993 | black | (27,27,27) | earliest retro black scan; replicated margin must be muddy near-black, not stark `#000`, with no scan ring |
 | Worn Powerstone | USG | 318 | 1997 | black | (24,21,16) | mid-era retro black scan |
 | Damnation | PLC | 85 | 2003 | black | (24,21,16) | late retro black scan |
-| Serra Angel | 2ED | 40 | 1993 | white | (237,237,239) | retro white scan; bleed must be soft off-white that matches, with no grey seam |
+| Serra Angel | 2ED | 40 | 1993 | white | (237,237,239) | retro white scan; replicated margin must be soft off-white that matches, with no grey seam |
 | Llanowar Elves | 6ED | 239 | 1997 | white | (237,237,238) | mid-era retro white scan |
 | Shock | 9ED | 220 | 2003 | white | (237,236,234) | late retro white scan |
-| Black Knight | WC97 | js143 | 1997 | gold | (167,137,77) | Worlds gold border; sampled gold must match without banding |
-| Ass Whuppin' | UNH | 117 | 2003 | silver | (128,128,128) | Unhinged silver that prints near-black; sampled tone, not a canonical guess |
+| Black Knight | WC97 | js143 | 1997 | gold | (167,137,77) | Worlds gold border; replicated metallic gold must continue without banding |
+| Ass Whuppin' | UNH | 117 | 2003 | silver | (128,128,128) | Unhinged silver that prints near-black; replicated from its own edge, not a canonical guess |
 | Sorin Markov | M12 | 109 | 2003 | black | (24,21,16) | planeswalker — protruding loyalty badge and the rounded corners must survive the edge clean |
-| Forest | ZEN | 246 | 2003 | black | (24,21,16) | retro full-art (`full_art=True`); no border to clean, art must reach the cut untouched |
+| Forest | ZEN | 246 | 2003 | black | (24,21,16) | retro `full_art=True` but a uniform black border — proves Full Art != Borderless; the alpha rim must not survive at the cut |
 | Black Lotus | VMA | 4 | 2015 | black | (0,0,0) | genuinely clean digital pure black; must stay perfectly seamless |
 | Abrupt Decay | MB2 | 78 | 2015 | white | (255,255,255) | genuinely clean digital pure white; must stay perfectly seamless |
-| Lightning Bolt | 2X2 | 117 | 2015 | black | (22,19,14) | modern frame but a muddy scan — proves "modern frame" does not imply pure black; bleed must match the muddy tone |
-| Blatant Thievery | E02 | 8 | 2015 | black | (23,20,15) | modern muddy scan with a localized light edge artifact at the bottom-left; the artifact must be painted over |
-| Island | ZNR | 271 | 2015 | black | (23,20,15) | modern full-art (`full_art=True`); edge is art, must not gain a border ring |
-| Adorable Kitten | UST | 1 | 2015 | silver | (162,174,182) | Unstable silver border |
-| Rainbow Dash | SLD | 1540 | 2015 | silver | (137,141,144) | Secret Lair with a non-uniform edge |
-| Ajani, Sleeper Agent | DMU | 375 | 2015 | borderless | (164,150,80) | borderless; edge replication or `--borderless-fill` |
+| Lightning Bolt | 2X2 | 117 | 2015 | black | (22,19,14) | modern frame but a muddy scan — proves "modern frame" does not imply pure black; replicated margin must match the muddy tone |
+| Blatant Thievery | E02 | 8 | 2015 | black | (23,20,15) | modern muddy scan with a localized light edge artifact at the bottom-left; the inset must drop it |
+| Island | ZNR | 271 | 2015 | black | (23,20,15) | modern `full_art=True` uniform black border; edge must not gain a border ring nor keep the alpha rim |
+| Adorable Kitten | UST | 1 | 2015 | silver | (162,174,182) | Unstable silver: light silver sides with a black bottom border and rounded black corner — each edge must extend in its own tone from one pass |
+| Rainbow Dash | SLD | 1540 | 2015 | silver | (137,141,144) | Secret Lair with a non-uniform silver edge; replication follows the variation, a single fill cannot |
+| Ajani, Sleeper Agent | DMU | 375 | 2015 | borderless | (164,150,80) | borderless; replication continues the art to the cut — no border ring, no median fill |
 
 ## Generating a sheet
 
@@ -66,8 +69,10 @@ uvx --refresh --from git+https://github.com/spawnia/mtg-proxies@personal mtg-pro
 
 ## What to check on the print
 
-- Each card's bleed matches its own border tone: muddy scans stay muddy, the clean digital cards (Black Lotus, Abrupt Decay) stay pure black / pure white, gold and silver match their sampled tone.
-- No hard color seam at the cut line, and no squared-off corners — the rounded corners survive (Sorin Markov is the clearest test).
+- Each card's margin continues its own edge: muddy scans stay muddy, the clean digital cards (Black Lotus, Abrupt Decay) stay pure black / pure white, gold and silver keep their metallic tone.
+- No hard colour seam at the cut line, and no squared-off corners — the rounded corners survive (Sorin Markov is the clearest test).
 - Blatant Thievery's bottom-left edge artifact is gone.
 - No content is clipped — Sorin Markov's loyalty badge and every collector / artist line stay intact.
-- Full-art and borderless cards (Forest, Island, Ajani) gain no border ring; their art reaches the cut.
+- Full-art and borderless cards (Forest, Island, Ajani) gain no border ring and keep no alpha rim; their art reaches the cut.
+- Multi-edge cards (Adorable Kitten): the black bottom border and its curvature extend as black while the silver sides stay light.
+- Busy borderless showcases may show mild streaks in the trimmed margin — acceptable.
