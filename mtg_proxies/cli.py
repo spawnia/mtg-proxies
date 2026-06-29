@@ -138,13 +138,6 @@ def main() -> None:
         default=0.0,
         metavar="MM",
     )
-    print_parser.add_argument(
-        "--borderless-fill",
-        help="how to fill the bleed area for borderless cards: edge (replicate outermost pixel), black, or white (default: %(default)s)",
-        choices=["edge", "black", "white"],
-        default="edge",
-    )
-
     # Convert tool
     convert_parser = subparsers.add_parser(
         "convert",
@@ -224,7 +217,6 @@ def main() -> None:
                     cropmarks=args.cropmarks,
                     bleed_mm=args.bleed,
                     gutter_mm=args.gutter,
-                    borderless_fill=args.borderless_fill,
                 )
             else:
                 print_cards_matplotlib(
@@ -237,7 +229,6 @@ def main() -> None:
                     background_color=args.background,
                     bleed_mm=args.bleed,
                     gutter_mm=args.gutter,
-                    borderless_fill=args.borderless_fill,
                 )
 
         case "convert":

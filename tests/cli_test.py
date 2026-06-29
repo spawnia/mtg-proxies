@@ -44,7 +44,6 @@ def test_print_help_mentions_new_flags(capsys: pytest.CaptureFixture) -> None:
     captured = capsys.readouterr()
     assert "--bleed" in captured.out
     assert "--gutter" in captured.out
-    assert "--borderless-fill" in captured.out
 
 
 def test_border_crop_and_gutter_mutually_exclusive(capsys: pytest.CaptureFixture) -> None:

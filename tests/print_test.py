@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="module")
-def example_scans(example_decklist: Decklist) -> list[tuple[str, str, bool]]:
+def example_scans(example_decklist: Decklist) -> list[str]:
     from mtg_proxies import fetch_scans_scryfall
 
     example_scans = fetch_scans_scryfall(example_decklist)
@@ -20,17 +20,11 @@ def example_scans(example_decklist: Decklist) -> list[tuple[str, str, bool]]:
     return example_scans
 
 
-@pytest.fixture(scope="module")
-def example_images(example_scans: list[tuple[str, str, bool]]) -> list[str]:
-    return [path for path, _, _ in example_scans]
+def test_fetch_scans_returns_paths(example_scans: list[str]) -> None:
+    assert all(isinstance(scan, str) for scan in example_scans)
 
 
-def test_fetch_scans_returns_tuples(example_scans: list[tuple[str, str, bool]]) -> None:
-    assert all(isinstance(t, tuple) and len(t) == 3 for t in example_scans)
-    assert all(isinstance(t[0], str) and isinstance(t[1], str) and isinstance(t[2], bool) for t in example_scans)
-
-
-def test_print_cards_fpdf(example_scans: list[tuple[str, str, bool]], tmp_path: Path) -> None:
+def test_print_cards_fpdf(example_scans: list[str], tmp_path: Path) -> None:
     from mtg_proxies import print_cards_fpdf
 
     out_file = tmp_path / "decklist.pdf"
@@ -40,7 +34,7 @@ def test_print_cards_fpdf(example_scans: list[tuple[str, str, bool]], tmp_path: 
 
 
 def test_print_cards_matplotlib_pdf(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path
+    example_scans: list[str], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -51,7 +45,7 @@ def test_print_cards_matplotlib_pdf(
 
 
 def test_print_cards_matplotlib_png(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path
+    example_scans: list[str], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -105,7 +99,7 @@ def test_occupied_space_closed_form_adds_n_minus_1_gutters() -> None:
 
 
 def test_print_cards_matplotlib_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path
+    example_scans: list[str], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_matplotlib
 
@@ -115,20 +109,8 @@ def test_print_cards_matplotlib_with_bleed_and_gutter(
     assert (tmp_path / "decklist_bleed_000.png").is_file()
 
 
-def test_print_cards_matplotlib_with_borderless_fill_black(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path
-) -> None:
-    from mtg_proxies import print_cards_matplotlib
-
-    fake_scans: list[tuple[str, str, bool]] = [(path, "borderless", False) for path, _, _ in example_scans]
-    out_file = tmp_path / "decklist_borderless.png"
-    print_cards_matplotlib(fake_scans, out_file, bleed_mm=3.0, borderless_fill="black")
-
-    assert (tmp_path / "decklist_borderless_000.png").is_file()
-
-
 def test_print_cards_fpdf_with_bleed_and_gutter(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path
+    example_scans: list[str], tmp_path: Path
 ) -> None:
     from mtg_proxies import print_cards_fpdf
 
@@ -190,124 +172,6 @@ def test_crop_mark_positions_with_gutter_per_card_corners() -> None:
         ]
     )
     assert np.allclose(marks, expected)
-
-
-def test_estimate_border_color_ignores_dots_and_transparent_corners() -> None:
-    import numpy as np
-
-    from mtg_proxies.print_cards import _estimate_border_color
-
-    img = np.full((20, 16, 4), 0.1, dtype=float)
-    img[..., 3] = 1.0
-    img[0, 0] = [1.0, 1.0, 1.0, 0.0]          # transparent corner
-    img[19, 15] = [1.0, 1.0, 1.0, 0.0]        # transparent corner
-    img[1, 8, :3] = 1.0                        # stray bright dot in top band
-
-    assert np.allclose(_estimate_border_color(img), [0.1, 0.1, 0.1])
-
-
-def test_bleed_fill_color_bordered_uses_ring_median() -> None:
-    import numpy as np
-
-    from mtg_proxies.print_cards import _bleed_fill_color
-
-    img = np.zeros((20, 16, 4), dtype=float)
-    img[..., 3] = 1.0
-    img[..., :3] = [0.8, 0.6, 0.2]
-
-    assert _bleed_fill_color(img, "gold", "edge") == (204, 153, 51)
-
-
-def test_bleed_fill_color_keeps_muddy_black() -> None:
-    import numpy as np
-
-    from mtg_proxies.print_cards import _bleed_fill_color
-
-    img = np.full((20, 16, 4), 0.1, dtype=float)
-    img[..., 3] = 1.0
-
-    # A muddy scanned black stays muddy rather than being forced to pure (0, 0, 0).
-    assert _bleed_fill_color(img, "black", "edge") == (26, 26, 26)
-
-
-def test_bleed_fill_color_borderless_respects_fill() -> None:
-    import numpy as np
-
-    from mtg_proxies.print_cards import BORDER_COLOR_RGB, _bleed_fill_color
-
-    img = np.full((20, 16, 4), 0.5, dtype=float)
-    img[..., 3] = 1.0
-
-    assert _bleed_fill_color(img, "borderless", "black") == BORDER_COLOR_RGB["black"]
-    assert _bleed_fill_color(img, "borderless", "white") == BORDER_COLOR_RGB["white"]
-    # "edge" means replicate the scan, so it falls back to the ring median.
-    assert _bleed_fill_color(img, "borderless", "edge") == (128, 128, 128)
-
-
-def test_edge_inset_crops_bordered_cards_only() -> None:
-    from mtg_proxies.print_cards import EDGE_INSET, _edge_inset
-
-    assert _edge_inset("black", full_art=False) == EDGE_INSET
-    assert _edge_inset("white", full_art=False) == EDGE_INSET
-    # Full-art and borderless edges are artwork, not a border to crop away.
-    assert _edge_inset("black", full_art=True) == 0
-    assert _edge_inset("borderless", full_art=False) == 0
-
-
-def test_edge_inset_stays_inside_rounded_corner() -> None:
-    from mtg_proxies.print_cards import EDGE_INSET
-
-    # The Scryfall rounded-corner transparency reaches ~26 px in; the inset must
-    # stay below that so the corners survive, while covering edge scan artifacts.
-    assert 0 < EDGE_INSET < 26
-
-
-def test_matplotlib_cleans_edge_per_card_with_bleed(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import mtg_proxies.print_cards as pc
-    from mtg_proxies import print_cards_matplotlib
-
-    calls: list[int] = []
-    real_inset = pc._edge_inset
-
-    def spy(border_color, full_art) -> int:  # noqa: ANN001
-        inset = real_inset(border_color, full_art)
-        calls.append(inset)
-        return inset
-
-    monkeypatch.setattr(pc, "_edge_inset", spy)
-
-    bordered_scans = [(path, "black", False) for path, _, _ in example_scans]
-    out_file = tmp_path / "bleed.png"
-    print_cards_matplotlib(bordered_scans, out_file, bleed_mm=3.0)
-
-    assert (tmp_path / "bleed_000.png").is_file()
-    assert calls == [pc.EDGE_INSET] * len(bordered_scans)
-
-
-def test_fpdf_cleans_edge_per_card_with_bleed(
-    example_scans: list[tuple[str, str, bool]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import mtg_proxies.print_cards as pc
-    from mtg_proxies import print_cards_fpdf
-
-    calls: list[int] = []
-    real_inset = pc._edge_inset
-
-    def spy(border_color, full_art) -> int:  # noqa: ANN001
-        inset = real_inset(border_color, full_art)
-        calls.append(inset)
-        return inset
-
-    monkeypatch.setattr(pc, "_edge_inset", spy)
-
-    bordered_scans = [(path, "black", False) for path, _, _ in example_scans]
-    out_file = tmp_path / "bleed.pdf"
-    print_cards_fpdf(bordered_scans, out_file, bleed_mm=3.0)
-
-    assert out_file.is_file()
-    assert calls == [pc.EDGE_INSET] * len(bordered_scans)
 
 
 def test_flatten_corner_transparency_fills_runs_with_row_edge_pixel() -> None:
