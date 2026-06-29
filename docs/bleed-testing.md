@@ -46,6 +46,18 @@ It no longer drives the fill — replication does — but it stays the single mo
 | Adorable Kitten | UST | 1 | 2015 | silver | (162,174,182) | Unstable silver: light silver sides with a black bottom border and rounded black corner — each edge must extend in its own tone from one pass |
 | Rainbow Dash | SLD | 1540 | 2015 | silver | (137,141,144) | Secret Lair with a non-uniform silver edge; replication follows the variation, a single fill cannot |
 | Ajani, Sleeper Agent | DMU | 375 | 2015 | borderless | (164,150,80) | borderless; replication continues the art to the cut — no border ring, no median fill |
+| Aatchik, Emerald Radian | DFT | 360 | 2015 | borderless | (110,108,84) | borderless with a dark vignette edge — a solid edge replicates cleanly |
+| Adeline, Resplendent Cathar | FCA | 1 | 2015 | borderless | (208,214,210) | Final Fantasy full-art borderless — light painterly edge, mild acceptable streaks |
+| Aesi, Tyrant of Gyre Strait | SLD | 1873 | 2015 | borderless | (48,45,43) | Secret Lair "yearbook" borderless — cream photo edge replicates light |
+| Aether Vial | SLD | 1640 | 2015 | borderless | (219,210,195) | Secret Lair showcase — pale edge, mild streaks where the art varies |
+| Agonasaur Rex | DFT | 542 | 2015 | borderless | (162,120,181) | Aetherdrift borderless — purple frame edge replicates |
+| Ajani Goldmane | SLD | 1453 | 2015 | borderless | (215,211,62) | Secret Lair trading-card frame — holo-gradient edge, mild streaks |
+| Black Lotus | CEI | 233 | 1993 | black | (27,27,27) | Collectors' Edition square-corner card — muddy retro border extends; no rounded alpha rim to flatten |
+| Jaxis, the Troublemaker | SNC | 461 | 2015 | black | (22,19,14) | extended-art — red art bleeds to the sides while a black border stays top and bottom; adjacent edges disagree |
+| Drivnod, Carnage Dominus | ONE | 305 | 2015 | borderless | (28,32,52) | Phyrexian borderless with a dark bottom strip — bottom extends dark, top and sides extend art |
+| Putrefy | STA | 63 | 2015 | borderless | (218,209,170) | Mystical Archive showcase — cream and gold filigree edge, streak-prone but cream dominates |
+| Daybreak Ranger (back) | ISD | 176 | 2003 | black | (24,21,16) | transform back face (Nightfall Predator) — non-black olive-brown border tone must extend, not assume black |
+| Agatha's Champion | AWOE | 22 | 2015 | borderless | (76,79,57) | Art Series full-bleed painting — no frame at all, painterly edge, mild streaks |
 
 ## Generating a sheet
 
