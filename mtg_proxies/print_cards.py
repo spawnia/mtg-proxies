@@ -40,6 +40,53 @@ def _opaque_mask(arr: np.ndarray) -> np.ndarray:
     return np.ones(arr.shape[:2], dtype=bool)
 
 
+def _flatten_corner_transparency(img: np.ndarray) -> np.ndarray:
+    """Return opaque RGB with each transparent edge run replaced by its row's nearest opaque pixel.
+
+    Scryfall scans fade to transparent in the rounded corners. Replicating that
+    transparency outward would streak the bleed; instead each corner inherits its
+    own side's tone (the black bottom row stays black, the light top row stays
+    light) by copying the nearest opaque pixel along each row.
+    """
+    arr = _normalize(img)
+    rgb = arr[..., :3].copy()
+    if arr.shape[2] < 4:
+        return rgb
+    opaque = arr[..., 3] > 0.5
+    for row in range(rgb.shape[0]):
+        opaque_cols = np.flatnonzero(opaque[row])
+        if opaque_cols.size == 0:
+            continue
+        first, last = opaque_cols[0], opaque_cols[-1]
+        rgb[row, :first] = rgb[row, first]
+        rgb[row, last + 1 :] = rgb[row, last]
+    return rgb
+
+
+def bleed_image(img: np.ndarray, inset_px: int, bleed_px: tuple[int, int]) -> np.ndarray:
+    """Return an opaque float RGB image extended outward by ``bleed_px`` (rows, cols) per axis.
+
+    Insets ``inset_px`` off every edge to drop the semi-transparent alpha rim and
+    any edge scan artifact, flattens the rounded-corner transparency so each corner
+    keeps its own side's tone, then replicates every edge and corner pixel into the
+    margin with ``np.pad(mode="edge")``.
+    """
+    inset = img[inset_px : img.shape[0] - inset_px, inset_px : img.shape[1] - inset_px]
+    flat = _flatten_corner_transparency(inset)
+    bleed_rows, bleed_cols = bleed_px
+    return np.pad(flat, ((bleed_rows, bleed_rows), (bleed_cols, bleed_cols), (0, 0)), mode="edge")
+
+
+def _bleed_px(bleed_mm: float, cardsize_mm: np.ndarray) -> tuple[int, int]:
+    """Bleed margin in scan pixels as ``(rows, cols)`` for the scan resolution.
+
+    ``image_size`` is ``[width, height]``; ``cardsize_mm`` is ``[width, height]``,
+    so per-mm resolution is ``image_size / cardsize_mm`` in ``[x, y]`` order.
+    """
+    px_per_mm = image_size / cardsize_mm
+    return (round(bleed_mm * px_per_mm[1]), round(bleed_mm * px_per_mm[0]))
+
+
 def _central_band(length: int, fraction: float) -> tuple[int, int]:
     """Index range covering the central ``fraction`` of ``length``."""
     margin = int(length * (1 - fraction) / 2)

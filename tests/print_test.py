@@ -308,3 +308,77 @@ def test_fpdf_cleans_edge_per_card_with_bleed(
 
     assert out_file.is_file()
     assert calls == [pc.EDGE_INSET] * len(bordered_scans)
+
+
+def test_flatten_corner_transparency_fills_runs_with_row_edge_pixel() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _flatten_corner_transparency
+
+    img = np.zeros((2, 4, 4), dtype=float)
+    img[..., 3] = 1.0
+    img[0, :, :3] = 0.8        # light top row
+    img[0, 0] = [0.5, 0.5, 0.5, 0.0]   # transparent top-left corner with junk colour
+    img[1, :, :3] = 0.0        # black bottom row
+    img[1, 3] = [0.5, 0.5, 0.5, 0.0]   # transparent bottom-right corner with junk colour
+
+    result = _flatten_corner_transparency(img)
+
+    assert np.allclose(result[0, 0], [0.8, 0.8, 0.8])   # took the row's first opaque pixel
+    assert np.allclose(result[1, 3], [0.0, 0.0, 0.0])   # took the row's last opaque pixel
+    assert result.shape == (2, 4, 3)
+
+
+def test_bleed_image_dimensions() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import bleed_image
+
+    img = np.ones((20, 16, 4), dtype=float)
+
+    result = bleed_image(img, inset_px=2, bleed_px=(3, 5))
+
+    # inset removes 2 px per edge (20->16 rows, 16->12 cols); pad adds 2*bleed per axis.
+    assert result.shape == (22, 22, 3)
+
+
+def test_bleed_image_replicates_edge_outward() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import bleed_image
+
+    img = np.zeros((10, 10, 4), dtype=float)
+    img[..., 3] = 1.0
+    img[..., :3] = 0.3
+    img[0, :, :3] = 0.9        # brighter top edge
+
+    result = bleed_image(img, inset_px=0, bleed_px=(2, 2))
+
+    assert np.allclose(result[0, 2], [0.9, 0.9, 0.9])
+
+
+def test_bleed_image_extends_each_edge_with_its_own_tone() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import bleed_image
+
+    img = np.full((6, 6, 4), 0.5, dtype=float)
+    img[..., 3] = 1.0
+    img[0, :, :3] = 1.0        # light top
+    img[5, :, :3] = 0.0        # black bottom
+
+    result = bleed_image(img, inset_px=0, bleed_px=(2, 0))
+
+    assert np.allclose(result[0], 1.0)     # top margin replicates the light top
+    assert np.allclose(result[-1], 0.0)    # bottom margin replicates the black bottom
+
+
+def test_bleed_px_resolves_each_axis_from_its_own_resolution() -> None:
+    import numpy as np
+
+    from mtg_proxies.print_cards import _bleed_px
+
+    # 745x1040 scan over a deliberately non-square 60x90 mm card separates the axes.
+    rows, cols = _bleed_px(3.0, np.array([60.0, 90.0]))
+
+    assert (rows, cols) == (35, 37)
