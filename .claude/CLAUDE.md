@@ -24,9 +24,13 @@ When a card misbehaves in the wild, add it (or a representative) to the fixture 
 
 Render a sheet (`.pdf` → fpdf renderer, other extension → matplotlib): `uv run mtg-proxies print --border_crop=0 --bleed=2 tests/data/bleed_edge_cases.txt out.pdf`.
 
-Remaining issues to solve in rough order:
-- Forest/Island show scan artifacts at the edge. Full Art != Borderless.  
-- Bottom of new-frame silver border cards looks bad - should be black, curvature of the bottom black border should extend.
-- True borderless cards don't look too well, the edge sampled average/median does not work well with parts of the card. Also, some new frame borderless cards also have the black bottom.
-- Metallic look of old silver and gold border cards is not preserved.
-- We probably have issues with many other kinds of weird borders and special prints - I would rather try and fix them all exhaustively now, rather than have to go back when I eventually encounter them.
+`--bleed` is now metadata-free: it insets each scan, flattens the rounded-corner transparency per row, then replicates the edge/corner pixels outward (`np.pad(mode="edge")`). No `full_art`/`border_color` is read for rendering. This resolved the issues below (verified by print inspection of the fixture):
+
+- ~~Forest/Island show scan artifacts at the edge. Full Art != Borderless.~~ — fixed; replication gives a clean black bleed, the alpha rim is inset away.
+- ~~Bottom of new-frame silver border cards looks bad - should be black, curvature should extend.~~ — fixed; the per-row flatten extends the black bottom while the silver sides stay light (Adorable Kitten).
+- ~~True borderless cards: edge median does not work.~~ — fixed; replication continues the art to the cut. Mild streaks on busy showcase edges are inherent and acceptable (trimmed margin).
+- ~~Metallic look of old silver/gold border cards is not preserved.~~ — fixed; replication keeps the actual metallic edge pixels instead of flattening to one colour.
+
+Open / future:
+- Many other weird borders and special prints are handled by construction (nothing is special-cased), but the fixture does not yet exhaust them — keep adding representatives as they surface.
+- Stretch idea: make the margin "draw" features correctly (continue art structure, not just replicate pixels) rather than mild streaking on busy edges. Hard; not planned.
